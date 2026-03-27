@@ -1,0 +1,19 @@
+# Exposes the Deployment via a GCP External HTTP(S) Load Balancer.
+# Apply with: kubectl apply -f k8s/service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-app-service
+  namespace: default
+  annotations:
+    # Provision a GCP external load balancer
+    cloud.google.com/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  selector:
+    app: image-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

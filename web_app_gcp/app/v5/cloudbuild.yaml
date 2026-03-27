@@ -1,0 +1,66 @@
+# Cloud Build pipeline: test → build → push → deploy
+# Triggered on push to main branch.
+# Replace PROJECT_ID and CLUSTER_NAME/ZONE with your values.
+
+substitutions:
+  _REGION: us-central1
+  _REPO: node-app-repo
+  _IMAGE: image-app
+  _CLUSTER_NAME: scaling-cluster
+  _CLUSTER_ZONE: us-central1-a
+
+steps:
+  # 1. Install dependencies
+  - name: 'node:18-alpine'
+    entrypoint: npm
+    args: ['ci']
+    dir: 'app/v5'
+
+  # 2. Run tests (add your test command here)
+  # - name: 'node:18-alpine'
+  #   entrypoint: npm
+  #   args: ['test']
+  #   dir: 'app/v5'
+
+  # 3. Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'
+      - 'app/v5'
+
+  # 4. Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}'
+
+  # 5. Get GKE credentials
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - get-credentials
+      - '${_CLUSTER_NAME}'
+      - '--zone=${_CLUSTER_ZONE}'
+    env:
+      - 'CLOUDSDK_CORE_PROJECT=$PROJECT_ID'
+
+  # 6. Rolling update: set the new image
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - set
+      - image
+      - 'deployment/image-app'
+      - 'image-app=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA'
+    env:
+      - 'CLOUDSDK_CORE_PROJECT=$PROJECT_ID'
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

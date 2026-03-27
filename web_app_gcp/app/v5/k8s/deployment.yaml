@@ -1,0 +1,84 @@
+# Replace PROJECT_ID and IMAGE_TAG with your actual values before applying.
+# Apply with: kubectl apply -f k8s/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-app
+  namespace: default
+  labels:
+    app: image-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: image-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: image-app
+    spec:
+      containers:
+        - name: image-app
+          image: us-central1-docker.pkg.dev/PROJECT_ID/node-app-repo/image-app:IMAGE_TAG
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: PUBSUB_TOPIC
+              value: "image-upload"
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_HOST
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_PASS
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_NAME
+            - name: GCS_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GCS_BUCKET
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: REDIS_HOST
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

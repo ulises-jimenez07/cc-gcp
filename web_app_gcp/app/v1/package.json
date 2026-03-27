@@ -1,0 +1,18 @@
+{
+  "name": "image-app-v1",
+  "version": "1.0.0",
+  "description": "Image processing app - v1: single server with local storage and MariaDB",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
