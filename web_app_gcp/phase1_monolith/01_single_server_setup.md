@@ -6,7 +6,7 @@ In this tutorial you deploy the first version of the **Image Processing & Storag
 graph TD
     Client([HTTP traffic]) --> VM
     subgraph VM[Compute Engine VM]
-        App[Express App] --> DB[(MariaDB local)]
+        App[FastAPI App] --> DB[(MariaDB local)]
         App --> Disk["/uploads\nlocal disk"]
     end
 ```
@@ -62,12 +62,12 @@ All subsequent commands in this tutorial are run **inside the VM**.
 
 ---
 
-## 3. Install Node.js 18
+## 3. Install Python 3.11
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node --version   # should print v18.x.x
+sudo apt-get update
+sudo apt-get install -y python3.11 python3.11-venv python3-pip
+python3.11 --version   # should print Python 3.11.x
 ```
 
 ---
@@ -119,16 +119,18 @@ EXIT;
 
 ---
 
-## 6. Deploy the Node.js app
+## 6. Deploy the Python app
 
 ```bash
 # Install git and clone the repo
 sudo apt-get install -y git
 git clone https://github.com/ulises-jimenez07/cc-gcp.git
-cd cc-gcp/app/v1
+cd cc-gcp/web_app_gcp/app/v1
 
-# Install dependencies
-npm install
+# Create a virtual environment and install dependencies
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
 # Set environment variables (edit values as needed)
 export DB_HOST=localhost
@@ -138,14 +140,39 @@ export DB_NAME=app_db
 export PORT=3000
 ```
 
-### Keep the app running with pm2
+### Keep the app running with uvicorn + systemd
 
 ```bash
-sudo npm install -g pm2
+# Install fastapi[standard] inside the venv (already included in requirements.txt for v5,
+# but for v1 run: pip install "fastapi[standard]")
+pip install "fastapi[standard]"
 
-pm2 start app.js --name image-app
-pm2 startup systemd    # follow the printed instructions to persist across reboots
-pm2 save
+# Create a systemd service file
+sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
+[Unit]
+Description=Image App (FastAPI)
+After=network.target
+
+[Service]
+User=$USER
+WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v1
+Environment=DB_HOST=localhost
+Environment=DB_USER=app_user
+Environment=DB_PASS=password
+Environment=DB_NAME=app_db
+Environment=PORT=3000
+ExecStart=/home/$USER/cc-gcp/web_app_gcp/app/v1/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable image-app
+sudo systemctl start image-app
+sudo systemctl status image-app
 ```
 
 ---
@@ -172,7 +199,7 @@ By default, only port 80 is open. The app listens on 3000, so either open the po
 gcloud compute firewall-rules create allow-app-3000 \
   --allow=tcp:3000 \
   --target-tags=http-server \
-  --description="Allow Node.js app traffic on port 3000"
+  --description="Allow Python app traffic on port 3000"
 ```
 
 ### Option B — Redirect port 80 → 3000 with iptables (no firewall rule needed)
@@ -219,7 +246,7 @@ Expected response for `/health`:
 
 | Component | Technology | Location |
 |-----------|-----------|----------|
-| Web server | Express.js | Same VM |
+| Web server | FastAPI (Python) | Same VM |
 | Database | MariaDB | Same VM |
 | File storage | Local disk (`/uploads`) | Same VM |
 

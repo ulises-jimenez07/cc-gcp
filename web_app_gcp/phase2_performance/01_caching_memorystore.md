@@ -6,7 +6,7 @@ In this tutorial you provision a **Memorystore (Redis)** instance and implement 
 
 ```mermaid
 graph TD
-    Client([Client]) --> App["Express App (v3)"]
+    Client([Client]) --> App["FastAPI App (v3)"]
     App -- "GET /images" --> Redis[("Redis\nMemorystore")]
     Redis -- "cache HIT\n< 1ms" --> App
     Redis -- "cache MISS" --> SQL[("Cloud SQL")]
@@ -91,8 +91,10 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
 ```bash
-cd ~/cc-gcp/app/v3
-npm install
+cd ~/cc-gcp/web_app_gcp/app/v3
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 Update the systemd service to add the new env vars:
@@ -100,14 +102,15 @@ Update the systemd service to add the new env vars:
 ```bash
 sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
 [Unit]
-Description=Image App Node.js Service (v3)
+Description=Image App (FastAPI v3)
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/home/<YOUR_USER>/cc-gcp/app/v3
-ExecStart=/usr/bin/node app.js
+User=<YOUR_USER>
+WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v3
+ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v3/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
 Restart=on-failure
 Environment=PORT=3000
 Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
@@ -129,30 +132,30 @@ sudo systemctl restart image-app
 
 ## 5. How the Cache-Aside code works
 
-The key logic in `app/v3/app.js`:
+The key logic in `app/v3/app.py`:
 
-```javascript
-// GET /images — Cache-Aside
-app.get('/images', async (req, res) => {
-  const CACHE_KEY = 'images:all';
-  const CACHE_TTL = 60; // seconds
+```python
+CACHE_KEY = 'images:all'
+CACHE_TTL = 60  # seconds
 
-  const cached = await redis.get(CACHE_KEY);
-  if (cached) {
-    return res.json({ source: 'cache', data: JSON.parse(cached) });
-  }
+# GET /images — Cache-Aside
+@app.get('/images')
+def list_images(db = Depends(get_db)):
+    cached = redis.get(CACHE_KEY)
+    if cached:
+        return {'source': 'cache', 'data': json.loads(cached)}
 
-  // Cache miss: query the DB
-  const [rows] = await pool.query('SELECT * FROM images ORDER BY created_at DESC');
+    # Cache miss: query the DB
+    with db.cursor() as cur:
+        cur.execute('SELECT * FROM images ORDER BY created_at DESC')
+        rows = cur.fetchall()
 
-  // Populate cache with 60-second TTL
-  await redis.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(rows));
+    # Populate cache with 60-second TTL
+    redis.setex(CACHE_KEY, CACHE_TTL, json.dumps(rows, default=str))
+    return {'source': 'db', 'data': rows}
 
-  res.json({ source: 'db', data: rows });
-});
-
-// POST /upload — after writing to DB, invalidate the cache
-await redis.del('images:all');
+# POST /upload — after writing to DB, invalidate the cache
+redis.delete(CACHE_KEY)
 ```
 
 ---

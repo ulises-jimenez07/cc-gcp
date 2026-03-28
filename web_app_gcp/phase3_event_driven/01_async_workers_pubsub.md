@@ -6,7 +6,7 @@ Image resizing is CPU-intensive. If the web app generates a thumbnail synchronou
 
 ```mermaid
 graph LR
-    Client([Client]) -- "POST /upload" --> App["Express App (v4)"]
+    Client([Client]) -- "POST /upload" --> App["FastAPI App (v4)"]
     App -- "upload original" --> GCS["Cloud Storage\n(originals)"]
     App -- "publish event" --> PS["Pub/Sub Topic\nimage-upload"]
     App -- "201 queued" --> Client
@@ -15,7 +15,7 @@ graph LR
 ```
 
 **App version:** `v4`
-**Function:** `app/v4/functions/thumbnail-worker/`
+**Function:** `app/v4/functions/thumbnail-worker/` (Python)
 **Previous tutorial:** [2.2 CDN with Cloud Storage](../phase2_performance/02_cdn.md)
 **Next tutorial:** [4.1 Containerization & Cloud Run](../phase4_containers/01_containerization_cloud_run.md)
 
@@ -84,12 +84,12 @@ The function code is in [app/v4/functions/thumbnail-worker/](../app/v4/functions
 3. **Function name**: `thumbnail-worker`
 4. **Region**: `us-central1`
 5. **Trigger type**: Cloud Pub/Sub → select topic `image-upload`
-6. **Runtime**: Node.js 18
-7. **Entry point**: `generateThumbnail`
-8. Upload the source code (or paste from `index.js` and `package.json`)
+6. **Runtime**: Python 3.11
+7. **Entry point**: `generate_thumbnail`
+8. Upload the source code (or paste from `main.py` and `requirements.txt`)
 9. Under **Runtime, build, connections and security settings**:
    - **Service account**: `thumbnail-worker-sa`
-   - **Memory**: 512 MB (sharp is memory-intensive)
+   - **Memory**: 512 MB (Pillow is memory-intensive)
 10. Click **Deploy**
 
 ### gcloud CLI
@@ -100,10 +100,10 @@ BUCKET_NAME=my-app-images-$PROJECT_ID
 
 gcloud functions deploy thumbnail-worker \
   --gen2 \
-  --runtime=nodejs18 \
+  --runtime=python311 \
   --region=us-central1 \
-  --source=app/v4/functions/thumbnail-worker \
-  --entry-point=generateThumbnail \
+  --source=web_app_gcp/app/v4/functions/thumbnail-worker \
+  --entry-point=generate_thumbnail \
   --trigger-topic=image-upload \
   --service-account=thumbnail-worker-sa@$PROJECT_ID.iam.gserviceaccount.com \
   --memory=512MB \
@@ -114,7 +114,7 @@ gcloud functions deploy thumbnail-worker \
 
 ## 4. Update the app to v4
 
-The v4 app ([app/v4/app.js](../app/v4/app.js)) is identical to v3 with one addition: after uploading to GCS and recording in Cloud SQL, it publishes a Pub/Sub message.
+The v4 app ([app/v4/app.py](../app/v4/app.py)) is identical to v3 with one addition: after uploading to GCS and recording in Cloud SQL, it publishes a Pub/Sub message.
 
 The published message format:
 ```json
@@ -133,15 +133,36 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
 ```bash
-cd ~/cc-gcp/app/v4
-npm install
+cd ~/cc-gcp/web_app_gcp/app/v4
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
 # Update systemd service
-sudo nano /etc/systemd/system/image-app.service
+sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
+[Unit]
+Description=Image App (FastAPI v4)
+After=network.target
 
-# Add/update the entry point and env var:
-# WorkingDirectory=/home/<YOUR_USER>/cc-gcp/app/v4
-# Environment=PUBSUB_TOPIC=image-upload
+[Service]
+Type=simple
+User=<YOUR_USER>
+WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v4
+ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v4/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
+Restart=on-failure
+Environment=PORT=3000
+Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
+Environment=DB_USER=app_user
+Environment=DB_PASS=StrongPassword123!
+Environment=DB_NAME=app_db
+Environment=GCS_BUCKET=my-app-images-<PROJECT_ID>
+Environment=REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+Environment=PUBSUB_TOPIC=image-upload
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 sudo systemctl daemon-reload
 sudo systemctl restart image-app

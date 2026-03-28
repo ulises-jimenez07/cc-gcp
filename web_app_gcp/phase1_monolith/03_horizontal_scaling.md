@@ -27,19 +27,26 @@ SSH into `monolith-server`:
 gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
-Create a systemd service so the app starts on boot (more reliable than pm2 for machine images):
+Verify the systemd service (created in Tutorial 1.2) is enabled and pointing to v2:
+
+```bash
+sudo systemctl status image-app
+```
+
+If you need to update the service file (e.g., to point to v2):
 
 ```bash
 sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
 [Unit]
-Description=Image App Node.js Service
+Description=Image App (FastAPI)
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/home/<YOUR_USER>/cc-gcp/app/v2
-ExecStart=/usr/bin/node app.js
+User=<YOUR_USER>
+WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v2
+ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v2/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
 Restart=on-failure
 Environment=PORT=3000
 Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>

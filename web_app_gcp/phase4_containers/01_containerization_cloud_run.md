@@ -23,30 +23,34 @@ graph LR
 
 ## 1. Review the Dockerfile
 
-The Dockerfile is at [app/v5/Dockerfile](../app/v5/Dockerfile). It uses a multi-stage build to keep the final image small:
+The Dockerfile is at [app/v5/Dockerfile](../app/v5/Dockerfile):
 
 ```dockerfile
-# Stage 1: install dependencies
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production
+FROM python:3.11-slim
 
-# Stage 2: production image
-FROM node:18-alpine
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create a non-root user for security
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
 WORKDIR /app
-COPY --from=builder /app/node_modules ./node_modules
-COPY app.js ./
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
+
 USER appuser
+
+# Cloud Run injects PORT; default to 8080
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "app.js"]
+
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "60", "app:app"]
 ```
 
 Key points:
-- `node:18-alpine` keeps the image under 200 MB
+- `python:3.11-slim` is a minimal Debian-based image (~50 MB base)
 - A non-root user (`appuser`) runs the process — never run as root in production
+- `gunicorn` with `uvicorn.workers.UvicornWorker` is the recommended way to run a FastAPI (ASGI) app in production; FastAPI's built-in `uvicorn` server is for development only
 - Cloud Run injects the `PORT` env var; the app listens on it (`8080` by default)
 
 ---
@@ -60,7 +64,7 @@ Artifact Registry stores your Docker images.
 > **APIs**: If prompted, enable the **Artifact Registry API** and **Cloud Build API**.
 
 1. **Artifact Registry > Repositories > Create Repository**
-   - **Name**: `node-app-repo`
+   - **Name**: `python-app-repo`
    - **Format**: Docker
    - **Mode**: Standard
    - **Location type**: Region → `us-central1`
@@ -69,10 +73,10 @@ Artifact Registry stores your Docker images.
 ### gcloud CLI
 
 ```bash
-gcloud artifacts repositories create node-app-repo \
+gcloud artifacts repositories create python-app-repo \
   --repository-format=docker \
   --location=us-central1 \
-  --description="Node.js image app container images"
+  --description="Python image app container images"
 ```
 
 ---
@@ -91,20 +95,20 @@ Cloud Build runs the Docker build in the cloud — no need to have Docker instal
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
-IMAGE_PATH=us-central1-docker.pkg.dev/$PROJECT_ID/node-app-repo/image-app
+IMAGE_PATH=us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo/image-app
 
 # Build and push (run from the repo root)
-gcloud builds submit app/v5 \
+gcloud builds submit web_app_gcp/app/v5 \
   --tag=$IMAGE_PATH:v5
 ```
 
-*Note: Cloud Build uploads the `app/v5/` directory as the build context. Make sure `.dockerignore` excludes `node_modules`.*
+*Note: Cloud Build uploads the `web_app_gcp/app/v5/` directory as the build context. Make sure `.dockerignore` excludes `__pycache__/` and `*.pyc`.*
 
 ### Verify the image was pushed
 
 ```bash
 gcloud artifacts docker images list \
-  us-central1-docker.pkg.dev/$PROJECT_ID/node-app-repo
+  us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo
 ```
 
 ---
@@ -113,7 +117,7 @@ gcloud artifacts docker images list \
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
-IMAGE_PATH=us-central1-docker.pkg.dev/$PROJECT_ID/node-app-repo/image-app:v5
+IMAGE_PATH=us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo/image-app:v5
 CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
 REDIS_IP=<MEMORYSTORE_PRIVATE_IP>
 BUCKET_NAME=my-app-images-$PROJECT_ID

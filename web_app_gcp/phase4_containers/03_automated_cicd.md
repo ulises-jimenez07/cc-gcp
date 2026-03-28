@@ -7,7 +7,7 @@ graph TD
     Dev([Developer]) -- "git push origin main" --> GH[GitHub Repository]
     GH -- "Cloud Build Trigger fires" --> CB
     subgraph CB[Cloud Build Pipeline]
-        S1["Step 1: npm install"] --> S2["Step 2: npm test"]
+        S1["Step 1: pip install"] --> S2["Step 2: pytest"]
         S2 --> S3["Step 3: docker build"]
         S3 --> S4["Step 4: docker push → Artifact Registry"]
         S4 --> S5["Step 5: kubectl set image → GKE"]
@@ -26,9 +26,9 @@ The pipeline is defined in [app/v5/cloudbuild.yaml](../app/v5/cloudbuild.yaml):
 ```yaml
 steps:
   # Install dependencies
-  - name: 'node:18-alpine'
-    entrypoint: npm
-    args: ['ci']
+  - name: 'python:3.11-slim'
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt', '--quiet']
     dir: 'app/v5'
 
   # Build the Docker image (tagged with the short commit SHA)
@@ -116,7 +116,7 @@ gcloud builds connections create github cc-gcp-connection \
    - **Location**: Repository, `/app/v5/cloudbuild.yaml`
 2. **Substitution variables** (optional, override defaults from cloudbuild.yaml):
    - `_REGION` = `us-central1`
-   - `_REPO` = `node-app-repo`
+   - `_REPO` = `python-app-repo`
    - `_IMAGE` = `image-app`
    - `_CLUSTER_NAME` = `scaling-cluster`
    - `_CLUSTER_ZONE` = `us-central1-a`
@@ -134,7 +134,7 @@ gcloud builds triggers create github \
   --repo-owner=YOUR_GITHUB_USERNAME \
   --branch-pattern='^main$' \
   --build-config=app/v5/cloudbuild.yaml \
-  --substitutions='_REGION=us-central1,_REPO=node-app-repo,_IMAGE=image-app,_CLUSTER_NAME=scaling-cluster,_CLUSTER_ZONE=us-central1-a'
+  --substitutions='_REGION=us-central1,_REPO=python-app-repo,_IMAGE=image-app,_CLUSTER_NAME=scaling-cluster,_CLUSTER_ZONE=us-central1-a'
 ```
 
 ---
@@ -145,9 +145,9 @@ Make any change to the app and push to `main`:
 
 ```bash
 # Example: update the health endpoint response
-# Edit app/v5/app.js, change the version string
+# Edit app/v5/app.py, change the version string
 
-git add app/v5/app.js
+git add app/v5/app.py
 git commit -m "chore: bump version to v5.1"
 git push origin main
 ```
@@ -211,9 +211,9 @@ The pipeline has a commented-out test step in `cloudbuild.yaml`. To activate it,
 
 ```yaml
 # Uncomment in app/v5/cloudbuild.yaml:
-- name: 'node:18-alpine'
-  entrypoint: npm
-  args: ['test']
+- name: 'python:3.11-slim'
+  entrypoint: python
+  args: ['-m', 'pytest', 'tests/']
   dir: 'app/v5'
 ```
 
@@ -226,8 +226,8 @@ With tests in place, a failing test blocks the build from proceeding to the Dock
 ```mermaid
 graph TD
     Push["git push"] --> Trigger["Cloud Build Trigger"]
-    Trigger --> NpmCI["npm ci\ninstall dependencies"]
-    NpmCI --> NpmTest["npm test\nstops pipeline on failure"]
+    Trigger --> NpmCI["pip install\ninstall dependencies"]
+    NpmCI --> NpmTest["pytest\nstops pipeline on failure"]
     NpmTest --> DockerBuild["docker build\nimage tagged with $SHORT_SHA"]
     DockerBuild --> DockerPush["docker push\nArtifact Registry"]
     DockerPush --> GetCreds["get-credentials\nauthenticate to GKE"]

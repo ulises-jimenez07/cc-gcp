@@ -204,11 +204,11 @@ To deploy a new image version without downtime:
 # Build and push a new image
 NEW_TAG=v5.1
 gcloud builds submit app/v5 \
-  --tag=us-central1-docker.pkg.dev/$PROJECT_ID/node-app-repo/image-app:$NEW_TAG
+  --tag=us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo/image-app:$NEW_TAG
 
 # Update the deployment image
 kubectl set image deployment/image-app \
-  image-app=us-central1-docker.pkg.dev/$PROJECT_ID/node-app-repo/image-app:$NEW_TAG
+  image-app=us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo/image-app:$NEW_TAG
 
 # Monitor rollout
 kubectl rollout status deployment/image-app

@@ -1,22 +1,14 @@
-# --- Build stage ---
-FROM node:18-alpine AS builder
-
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production
-
-# --- Production stage ---
-FROM node:18-alpine
+FROM python:3.11-slim
 
 # Create a non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
-# Copy only production dependencies and app code
-COPY --from=builder /app/node_modules ./node_modules
-COPY app.js ./
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
 
 USER appuser
 
@@ -24,4 +16,4 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "app.js"]
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "60", "app:app"]

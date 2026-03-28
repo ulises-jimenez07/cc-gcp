@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: image-app
-          image: us-central1-docker.pkg.dev/PROJECT_ID/node-app-repo/image-app:IMAGE_TAG
+          image: us-central1-docker.pkg.dev/PROJECT_ID/python-app-repo/image-app:IMAGE_TAG
           ports:
             - containerPort: 8080
           env:

@@ -8,7 +8,7 @@ In this tutorial you migrate the database to **Cloud SQL (MySQL)** and connect t
 graph LR
     Client([HTTP traffic]) --> VM
     subgraph VM[Compute Engine VM]
-        App["Express App (v2)"]
+        App["FastAPI App (v2)"]
         Disk["/uploads local"]
     end
     App -- Private IP --> SQL[("Cloud SQL\nMySQL 8.0\nPrivate IP only")]
@@ -150,50 +150,43 @@ EXIT;
 
 ## 5. Update the app configuration
 
-On the VM, update the environment variables in your pm2 ecosystem or systemd service to point to Cloud SQL:
+On the VM, update the systemd service to point to Cloud SQL and switch to v2:
 
 ```bash
-# Stop the old app
-pm2 stop image-app
-
 # Switch to v2
-cd ~/cc-gcp/app/v2
-npm install
-
-# Export new environment variables
-export DB_HOST=<CLOUD_SQL_PRIVATE_IP>
-export DB_USER=app_user
-export DB_PASS='StrongPassword123!'
-export DB_NAME=app_db
-export PORT=3000
-
-# Restart
-pm2 start app.js --name image-app
-pm2 save
+cd ~/cc-gcp/web_app_gcp/app/v2
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-To persist env vars across reboots, add them to `/etc/environment` or the pm2 ecosystem file:
+Update the systemd service file with the new working directory and Cloud SQL IP:
 
 ```bash
-# Create pm2 ecosystem file for persistent config
-cat > ecosystem.config.js << 'EOF'
-module.exports = {
-  apps: [{
-    name: 'image-app',
-    script: 'app.js',
-    env: {
-      PORT: 3000,
-      DB_HOST: '<CLOUD_SQL_PRIVATE_IP>',
-      DB_USER: 'app_user',
-      DB_PASS: 'StrongPassword123!',
-      DB_NAME: 'app_db'
-    }
-  }]
-};
+sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
+[Unit]
+Description=Image App (FastAPI)
+After=network.target
+
+[Service]
+User=$USER
+WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v2
+Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
+Environment=DB_USER=app_user
+Environment=DB_PASS=StrongPassword123!
+Environment=DB_NAME=app_db
+Environment=PORT=3000
+ExecStart=/home/$USER/cc-gcp/web_app_gcp/app/v2/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
-pm2 start ecosystem.config.js
-pm2 save
+sudo systemctl daemon-reload
+sudo systemctl restart image-app
+sudo systemctl status image-app
 ```
 
 ---

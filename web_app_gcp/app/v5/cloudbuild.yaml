@@ -4,22 +4,22 @@
 
 substitutions:
   _REGION: us-central1
-  _REPO: node-app-repo
+  _REPO: python-app-repo
   _IMAGE: image-app
   _CLUSTER_NAME: scaling-cluster
   _CLUSTER_ZONE: us-central1-a
 
 steps:
   # 1. Install dependencies
-  - name: 'node:18-alpine'
-    entrypoint: npm
-    args: ['ci']
+  - name: 'python:3.11-slim'
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt', '--quiet']
     dir: 'app/v5'
 
   # 2. Run tests (add your test command here)
-  # - name: 'node:18-alpine'
-  #   entrypoint: npm
-  #   args: ['test']
+  # - name: 'python:3.11-slim'
+  #   entrypoint: python
+  #   args: ['-m', 'pytest', 'tests/']
   #   dir: 'app/v5'
 
   # 3. Build the Docker image

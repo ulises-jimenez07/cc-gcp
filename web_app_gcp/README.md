@@ -1,6 +1,6 @@
-# Scaling from Zero to Millions on GCP (Node.js Edition)
+# Scaling from Zero to Millions on GCP (Python Edition)
 
-A hands-on tutorial series that builds an **Image Processing & Storage App** in Node.js, evolving it from a single VM all the way to a fully containerized, auto-scaling system on Google Cloud Platform.
+A hands-on tutorial series that builds an **Image Processing & Storage App** in Python, evolving it from a single VM all the way to a fully containerized, auto-scaling system on Google Cloud Platform.
 
 Follows the evolutionary scaling path described in *System Design Interview* (Alex Xu), Chapter 1.
 
@@ -12,7 +12,7 @@ We build one application across five versions:
 
 | Version | What changes |
 |---------|-------------|
-| v1 | Express app on a single VM, images stored locally, MariaDB on the same machine |
+| v1 | FastAPI app on a single VM, images stored locally, MariaDB on the same machine |
 | v2 | App connects to **Cloud SQL** (MySQL) via Private IP |
 | v3 | Images stored in **GCS**, metadata cached in **Memorystore (Redis)** |
 | v4 | App publishes to **Pub/Sub**, background **Cloud Run Function** generates thumbnails |
@@ -72,8 +72,8 @@ app/
 
 - A GCP project with billing enabled
 - `gcloud` CLI installed and authenticated (`gcloud auth login`)
-- Node.js 18+ (for local development)
-- Basic familiarity with Express.js and SQL
+- Python 3.11+ (for local development)
+- Basic familiarity with FastAPI and SQL
 
 ## Enable Required APIs
 
