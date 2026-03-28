@@ -2,26 +2,17 @@
 
 Right now, deploying a new version of the app requires running several manual commands. **CI/CD (Continuous Integration / Continuous Deployment)** automates this: every push to the `main` branch triggers a pipeline that tests, builds, and deploys the new version automatically.
 
-```
-  Developer
-     │
-     │  git push origin main
-     ▼
-  GitHub Repository
-     │
-     │  Cloud Build Trigger fires
-     ▼
-  Cloud Build Pipeline
-  ┌──────────────────────────────────────────────┐
-  │  Step 1: npm install                         │
-  │  Step 2: npm test   (add your tests here)    │
-  │  Step 3: docker build                        │
-  │  Step 4: docker push → Artifact Registry     │
-  │  Step 5: kubectl set image → GKE             │
-  └──────────────────────────────────────────────┘
-     │
-     ▼
-  GKE Cluster — rolling update with zero downtime
+```mermaid
+graph TD
+    Dev([Developer]) -- "git push origin main" --> GH[GitHub Repository]
+    GH -- "Cloud Build Trigger fires" --> CB
+    subgraph CB[Cloud Build Pipeline]
+        S1["Step 1: npm install"] --> S2["Step 2: npm test"]
+        S2 --> S3["Step 3: docker build"]
+        S3 --> S4["Step 4: docker push → Artifact Registry"]
+        S4 --> S5["Step 5: kubectl set image → GKE"]
+    end
+    S5 --> GKE["GKE Cluster\nrolling update — zero downtime"]
 ```
 
 **Previous tutorial:** [4.2 Kubernetes Engine (GKE)](./02_kubernetes_gke.md)
@@ -232,18 +223,15 @@ With tests in place, a failing test blocks the build from proceeding to the Dock
 
 ## 9. Complete CI/CD pipeline summary
 
-```
-git push
-    │
-    ▼
-Cloud Build Trigger
-    │
-    ├── npm ci            ← install dependencies
-    ├── npm test          ← run tests (stops pipeline on failure)
-    ├── docker build      ← build image tagged with $SHORT_SHA
-    ├── docker push       ← push to Artifact Registry
-    ├── get-credentials   ← authenticate to GKE
-    └── kubectl set image ← rolling update in GKE
+```mermaid
+graph TD
+    Push["git push"] --> Trigger["Cloud Build Trigger"]
+    Trigger --> NpmCI["npm ci\ninstall dependencies"]
+    NpmCI --> NpmTest["npm test\nstops pipeline on failure"]
+    NpmTest --> DockerBuild["docker build\nimage tagged with $SHORT_SHA"]
+    DockerBuild --> DockerPush["docker push\nArtifact Registry"]
+    DockerPush --> GetCreds["get-credentials\nauthenticate to GKE"]
+    GetCreds --> KubeDeploy["kubectl set image\nrolling update in GKE"]
 ```
 
 Every production deployment is:

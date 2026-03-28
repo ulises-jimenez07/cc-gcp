@@ -4,14 +4,14 @@ The monolith stores both the application and the database on the same VM. This m
 
 In this tutorial you migrate the database to **Cloud SQL (MySQL)** and connect to it over a **Private IP** — no public internet exposure, no Cloud SQL Auth Proxy needed.
 
-```
-┌────────────────────┐      Private IP       ┌──────────────────────┐
-│  Compute Engine VM │ ──────────────────▶   │   Cloud SQL          │
-│  Express App (v2)  │                        │   MySQL 8.0          │
-│  /uploads (local)  │                        │   Private IP only    │
-└────────────────────┘                        └──────────────────────┘
-         ▲
-    HTTP traffic
+```mermaid
+graph LR
+    Client([HTTP traffic]) --> VM
+    subgraph VM[Compute Engine VM]
+        App["Express App (v2)"]
+        Disk["/uploads local"]
+    end
+    App -- Private IP --> SQL[("Cloud SQL\nMySQL 8.0\nPrivate IP only")]
 ```
 
 **App version:** `v2`
@@ -25,6 +25,8 @@ In this tutorial you migrate the database to **Cloud SQL (MySQL)** and connect t
 Cloud SQL Private IP requires VPC peering with Google's services network. You only need to do this once per VPC.
 
 ### Console
+
+> **API**: If prompted, enable the **Cloud SQL Admin API** and **Service Networking API**.
 
 1. **VPC Network > Private Service Access**
 2. Click **Allocate IP Range**

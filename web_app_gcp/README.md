@@ -74,3 +74,25 @@ app/
 - `gcloud` CLI installed and authenticated (`gcloud auth login`)
 - Node.js 18+ (for local development)
 - Basic familiarity with Express.js and SQL
+
+## Enable Required APIs
+
+Enable all GCP APIs used across the series in one command:
+
+```bash
+gcloud services enable \
+  compute.googleapis.com \
+  sqladmin.googleapis.com \
+  redis.googleapis.com \
+  storage.googleapis.com \
+  pubsub.googleapis.com \
+  cloudfunctions.googleapis.com \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  container.googleapis.com \
+  cloudbuild.googleapis.com \
+  secretmanager.googleapis.com \
+  vpcaccess.googleapis.com
+```
+
+Each tutorial also notes which API to enable when first using a new service.

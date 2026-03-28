@@ -4,23 +4,15 @@ Managing VMs — installing Node.js, configuring pm2, creating machine images �
 
 **Cloud Run** is a fully managed platform that runs containers without you managing any servers. It scales to zero when idle (no cost) and scales out automatically on traffic.
 
-```
-Source Code
-    │
-    │  gcloud builds submit
-    ▼
-Cloud Build  ──▶  Artifact Registry
-   (CI)              (container image)
-                          │
-                          │  gcloud run deploy
-                          ▼
-                     Cloud Run Service
-                    (serverless containers)
-                          │
-                    ┌─────┴──────┐
-                    ▼            ▼
-               Container    Container
-               Instance 1   Instance 2    (autoscaled)
+```mermaid
+graph LR
+    Code[Source Code] -- "gcloud builds submit" --> CB["Cloud Build (CI)"]
+    CB -- "push image" --> AR["Artifact Registry\n(container image)"]
+    AR -- "gcloud run deploy" --> CR
+    subgraph CR[Cloud Run Service - serverless]
+        C1[Container Instance 1]
+        C2["Container Instance 2\n(autoscaled)"]
+    end
 ```
 
 **App version:** `v5`
@@ -64,6 +56,8 @@ Key points:
 Artifact Registry stores your Docker images.
 
 ### Console
+
+> **APIs**: If prompted, enable the **Artifact Registry API** and **Cloud Build API**.
 
 1. **Artifact Registry > Repositories > Create Repository**
    - **Name**: `node-app-repo`
@@ -201,16 +195,41 @@ curl $SERVICE_URL/images
 
 ## 8. Connect Cloud Run to the VPC (for Cloud SQL and Memorystore)
 
-Cloud Run is serverless and runs outside your VPC by default. To reach Cloud SQL's private IP and Memorystore, enable **VPC Access**:
+Cloud Run is serverless and runs outside your VPC by default. To reach Cloud SQL's private IP and Memorystore, enable **VPC Access**.
+
+### Step 8a — Create a VPC connector
+
+#### Console
+
+1. **VPC Network > Serverless VPC Access > Create Connector**
+   - **Name**: `app-connector`
+   - **Region**: `us-central1`
+   - **Network**: `default`
+   - **Subnet**: Custom IP range → `10.8.0.0/28`
+2. Click **Create**
+
+#### gcloud CLI
 
 ```bash
-# Create a VPC connector (if not already created)
 gcloud compute networks vpc-access connectors create app-connector \
   --region=us-central1 \
   --network=default \
   --range=10.8.0.0/28
+```
 
-# Attach the connector to the Cloud Run service
+### Step 8b — Attach the connector to Cloud Run
+
+#### Console
+
+1. **Cloud Run > image-app > Edit & Deploy New Revision**
+2. Under **Connections** tab → **VPC**:
+   - **Connect to a VPC for outbound traffic**: select `app-connector`
+   - **Traffic routing**: Route only requests to private IPs through the VPC
+3. Click **Deploy**
+
+#### gcloud CLI
+
+```bash
 gcloud run services update image-app \
   --region=us-central1 \
   --vpc-connector=app-connector \

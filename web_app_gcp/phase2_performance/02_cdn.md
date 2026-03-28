@@ -8,26 +8,12 @@ In this tutorial you solve both by:
 - Uploading images to **Cloud Storage (GCS)** — a single, shared, globally durable object store.
 - Enabling **Cloud CDN** on the GCS bucket — files are cached at Google's edge nodes worldwide.
 
-```
-              User (São Paulo)
-                    │
-                    ▼
-          ┌──────────────────┐
-          │  Cloud CDN Edge  │  cache HIT: < 10ms
-          │  (Google PoP)    │
-          └────────┬─────────┘
-                   │ cache MISS
-                   ▼
-     ┌─────────────────────────┐
-     │  Cloud Storage Bucket   │  served from us-central1
-     │  (GCS Backend Bucket)   │
-     └─────────────────────────┘
-                   ▲
-         POST /upload  │
-                   │
-          ┌────────┴──────────┐
-          │  Express App (v3) │  streams files to GCS
-          └───────────────────┘
+```mermaid
+graph TD
+    User(["User (São Paulo)"]) --> CDN["Cloud CDN Edge\n(Google PoP)"]
+    CDN -- "cache HIT < 10ms" --> User
+    CDN -- "cache MISS" --> GCS["Cloud Storage Bucket\n(GCS Backend Bucket)\nserved from us-central1"]
+    App["Express App (v3)"] -- "POST /upload\nstreams files to GCS" --> GCS
 ```
 
 **App version:** `v3` (already written in Tutorial 2.1)
@@ -87,7 +73,21 @@ gsutil rm gs://$BUCKET_NAME/test.txt
 
 ## 3. Grant the VM's service account access to GCS
 
-Your VM uses its default service account to authenticate with GCS. Grant it the necessary role:
+Your VM uses its default service account to authenticate with GCS. Grant it the necessary role.
+
+First, find the VM's service account email:
+
+1. **Compute Engine > VM Instances > monolith-server**
+2. Under **Service accounts**, note the email — it looks like `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+
+### Console
+
+1. **Cloud Storage > Buckets > `my-app-images-PROJECT_ID` > Permissions > Grant Access**
+2. **New principals**: paste the service account email
+3. **Role**: Storage > Storage Object Admin
+4. Click **Save**
+
+### gcloud CLI
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)

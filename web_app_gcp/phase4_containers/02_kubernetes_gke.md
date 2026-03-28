@@ -4,25 +4,19 @@ Cloud Run is great for simple, stateless services. But for complex systems — m
 
 In this tutorial you deploy the containerized app to a GKE cluster using `kubectl` and Kubernetes manifests.
 
-```
-┌────────────────────────────────────────────────────────┐
-│  GKE Cluster (scaling-cluster)                         │
-│                                                        │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  Deployment: image-app                           │  │
-│  │  ┌──────────────┐  ┌──────────────┐             │  │
-│  │  │  Pod (v5)    │  │  Pod (v5)    │  ...        │  │
-│  │  └──────────────┘  └──────────────┘             │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                        │
-│  ┌──────────────────────┐                             │
-│  │  Service: LoadBalancer│ ◀── External HTTP traffic  │
-│  └──────────────────────┘                             │
-└────────────────────────────────────────────────────────┘
-          │                          │
-          ▼                          ▼
-    Cloud SQL                   Memorystore
-   (Private IP)                 (Private IP)
+```mermaid
+graph TD
+    HTTP(["External HTTP traffic"]) --> SVC["Service: LoadBalancer"]
+    subgraph Cluster["GKE Cluster (scaling-cluster)"]
+        SVC --> Deploy
+        subgraph Deploy["Deployment: image-app"]
+            P1["Pod (v5)"]
+            P2["Pod (v5)"]
+            P3["..."]
+        end
+    end
+    Deploy --> SQL[("Cloud SQL\nPrivate IP")]
+    Deploy --> MEM[("Memorystore\nPrivate IP")]
 ```
 
 **App version:** `v5`
@@ -34,6 +28,8 @@ In this tutorial you deploy the containerized app to a GKE cluster using `kubect
 ## 1. Create the GKE Cluster
 
 ### Console
+
+> **API**: If prompted, enable the **Kubernetes Engine API**.
 
 1. **Kubernetes Engine > Clusters > Create**
 2. Select **Standard** cluster (for full control)

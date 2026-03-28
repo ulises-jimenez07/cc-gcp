@@ -2,19 +2,13 @@
 
 In this tutorial you deploy the first version of the **Image Processing & Storage App** on a single Compute Engine VM. The web server, application logic, and database all run on the same machine — the classic monolith.
 
-```
-┌─────────────────────────────────┐
-│          Compute Engine VM      │
-│  ┌─────────┐   ┌─────────────┐ │
-│  │ Express │   │  MariaDB    │ │
-│  │  App    │──▶│  (local)    │ │
-│  └─────────┘   └─────────────┘ │
-│  ┌─────────────────────────────┐│
-│  │  /uploads  (local disk)     ││
-│  └─────────────────────────────┘│
-└─────────────────────────────────┘
-        ▲
-   HTTP traffic
+```mermaid
+graph TD
+    Client([HTTP traffic]) --> VM
+    subgraph VM[Compute Engine VM]
+        App[Express App] --> DB[(MariaDB local)]
+        App --> Disk["/uploads\nlocal disk"]
+    end
 ```
 
 **App version:** `v1`
@@ -25,6 +19,8 @@ In this tutorial you deploy the first version of the **Image Processing & Storag
 ## 1. Create the Compute Engine VM
 
 ### Console
+
+> **API**: If prompted, enable the **Compute Engine API**.
 
 1. **Compute Engine > VM Instances > Create Instance**
 2. Set **Name**: `monolith-server`
@@ -128,7 +124,7 @@ EXIT;
 ```bash
 # Install git and clone the repo
 sudo apt-get install -y git
-git clone https://github.com/YOUR_USERNAME/cc-gcp.git
+git clone https://github.com/ulises-jimenez07/cc-gcp.git
 cd cc-gcp/app/v1
 
 # Install dependencies
@@ -156,18 +152,32 @@ pm2 save
 
 ## 7. Expose port 3000 via a firewall rule
 
-By default, only port 80 is open. The app listens on 3000, so either redirect traffic or open the port:
+By default, only port 80 is open. The app listens on 3000, so either open the port or redirect traffic:
+
+### Option A — Open port 3000 (good for dev)
+
+#### Console
+
+1. **VPC Network > Firewall > Create Firewall Rule**
+2. **Name**: `allow-app-3000`
+3. **Direction of traffic**: Ingress
+4. **Targets**: Specified target tags → `http-server`
+5. **Source filter**: IPv4 ranges → `0.0.0.0/0`
+6. **Protocols and ports**: Specified protocols and ports → TCP → `3000`
+7. Click **Create**
+
+#### gcloud CLI
 
 ```bash
-# Option A: open port 3000 directly (good for dev)
 gcloud compute firewall-rules create allow-app-3000 \
   --allow=tcp:3000 \
   --target-tags=http-server \
   --description="Allow Node.js app traffic on port 3000"
 ```
 
+### Option B — Redirect port 80 → 3000 with iptables (no firewall rule needed)
+
 ```bash
-# Option B: redirect port 80 → 3000 with iptables (no firewall rule change needed)
 sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
 ```
 

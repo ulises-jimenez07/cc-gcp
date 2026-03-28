@@ -2,26 +2,13 @@
 
 A single VM cannot handle unlimited traffic. In this tutorial you replace the monolith VM with a **Managed Instance Group (MIG)** — a fleet of identical VMs that scales automatically — and place a **Global HTTP Load Balancer** in front of it.
 
-```
-                         ┌──────────────────────────────────────┐
-         Internet        │  Global HTTP(S) Load Balancer        │
-         ──────▶         │  (Forwarding Rule → URL Map →        │
-                         │   Backend Service)                    │
-                         └──────────────┬───────────────────────┘
-                                        │
-                    ┌───────────────────┼───────────────────┐
-                    ▼                   ▼                   ▼
-              ┌──────────┐       ┌──────────┐       ┌──────────┐
-              │  VM 1    │       │  VM 2    │       │  VM 3    │
-              │ (app v2) │       │ (app v2) │       │ (app v2) │
-              └──────────┘       └──────────┘       └──────────┘
-                    │                   │                   │
-                    └───────────────────┼───────────────────┘
-                                        ▼
-                               ┌─────────────────┐
-                               │   Cloud SQL      │
-                               │  (Private IP)    │
-                               └─────────────────┘
+```mermaid
+graph TD
+    Internet([Internet]) --> LB["Global HTTP(S) Load Balancer\nForwarding Rule → URL Map → Backend Service"]
+    LB --> VM1["VM 1\n(app v2)"]
+    LB --> VM2["VM 2\n(app v2)"]
+    LB --> VM3["VM 3\n(app v2)"]
+    VM1 & VM2 & VM3 --> SQL[("Cloud SQL\nPrivate IP")]
 ```
 
 **App version:** `v2` (running on each VM in the MIG)

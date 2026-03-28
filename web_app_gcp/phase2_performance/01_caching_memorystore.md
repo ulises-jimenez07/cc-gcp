@@ -4,20 +4,16 @@ As traffic grows, the same database queries run over and over — "list all imag
 
 In this tutorial you provision a **Memorystore (Redis)** instance and implement the **Cache-Aside** pattern in the app: check Redis first, fall back to Cloud SQL on a miss, then populate the cache for next time.
 
-```
-   Client
-     │
-     ▼
-  Express App (v3)
-     │
-     ├─── GET /images ──▶ Redis (Memorystore)
-     │                       │
-     │                 ┌─────┴──────┐
-     │                 │ cache HIT  │  return immediately (< 1ms)
-     │                 │ cache MISS │──▶ Cloud SQL ──▶ populate cache
-     │                 └────────────┘
-     │
-     └─── POST /upload ──▶ GCS ──▶ Cloud SQL ──▶ invalidate cache
+```mermaid
+graph TD
+    Client([Client]) --> App["Express App (v3)"]
+    App -- "GET /images" --> Redis[("Redis\nMemorystore")]
+    Redis -- "cache HIT\n< 1ms" --> App
+    Redis -- "cache MISS" --> SQL[("Cloud SQL")]
+    SQL -- "populate cache" --> Redis
+    App -- "POST /upload" --> GCS["Cloud Storage (GCS)"]
+    GCS --> SQL
+    SQL -- "invalidate cache" --> Redis
 ```
 
 **App version:** `v3`
@@ -44,6 +40,8 @@ This ensures the cache is never stale for long and is only populated with data t
 The Redis instance must be on the same VPC as your MIG VMs so it's reachable via Private IP.
 
 ### Console
+
+> **API**: If prompted, enable the **Memorystore for Redis API**.
 
 1. **Memorystore > Redis > Create Instance**
    - **Instance ID**: `metadata-cache`

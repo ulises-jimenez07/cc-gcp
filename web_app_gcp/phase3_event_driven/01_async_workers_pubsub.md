@@ -4,18 +4,14 @@ Image resizing is CPU-intensive. If the web app generates a thumbnail synchronou
 
 **Event-driven architecture** solves this: the web app publishes a lightweight event to a **Pub/Sub topic** and returns immediately. A separate **Cloud Run Function** subscribes to the topic and performs the thumbnail generation in the background.
 
-```
-                        Pub/Sub Topic
-   Client               "image-upload"
-     │                       │
-     │  POST /upload          │
-     ▼                       │
-  Express App (v4) ─publish──▶│──trigger──▶ thumbnail-worker
-     │   (fast!)              │              (Cloud Run Function)
-     │                        │               1. download original from GCS
-     ▼                                        2. resize with sharp (200x200)
-  Response: 201                               3. save thumbnail to GCS
-  "queued for processing"                         gs://bucket/thumbnails/thumb-...
+```mermaid
+graph LR
+    Client([Client]) -- "POST /upload" --> App["Express App (v4)"]
+    App -- "upload original" --> GCS["Cloud Storage\n(originals)"]
+    App -- "publish event" --> PS["Pub/Sub Topic\nimage-upload"]
+    App -- "201 queued" --> Client
+    PS -- "trigger" --> Worker["thumbnail-worker\n(Cloud Run Function)"]
+    Worker -- "1. download original\n2. resize 200x200\n3. save thumbnail" --> GCS2["Cloud Storage\nthumbnails/"]
 ```
 
 **App version:** `v4`
@@ -28,6 +24,8 @@ Image resizing is CPU-intensive. If the web app generates a thumbnail synchronou
 ## 1. Create the Pub/Sub Topic
 
 ### Console
+
+> **API**: If prompted, enable the **Cloud Pub/Sub API**.
 
 1. **Pub/Sub > Topics > Create Topic**
    - **Topic ID**: `image-upload`
@@ -45,6 +43,18 @@ gcloud pubsub topics create image-upload
 ## 2. Create a Service Account for the Function
 
 The Cloud Run Function needs permission to read and write objects in GCS.
+
+### Console
+
+1. **IAM & Admin > Service Accounts > Create Service Account**
+   - **Name**: `thumbnail-worker-sa`
+   - **Display name**: `Thumbnail Worker Service Account`
+   - Click **Create and Continue**
+2. **Grant this service account access to project**:
+   - Role: Storage > **Storage Object Admin**
+   - Click **Continue**, then **Done**
+
+### gcloud CLI
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
@@ -66,6 +76,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 The function code is in [app/v4/functions/thumbnail-worker/](../app/v4/functions/thumbnail-worker/).
 
 ### Console
+
+> **API**: If prompted, enable the **Cloud Run API** and **Cloud Build API** (required to deploy functions).
 
 1. **Cloud Run Functions > Create Function**
 2. **Environment**: 2nd gen
@@ -136,6 +148,16 @@ sudo systemctl restart image-app
 ```
 
 *Note: the VM's service account needs the `roles/pubsub.publisher` role to publish messages.*
+
+#### Console
+
+1. **IAM & Admin > IAM > Grant Access**
+2. **New principals**: `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+   *(find your project number under **IAM & Admin > Settings**)*
+3. **Role**: Pub/Sub > **Pub/Sub Publisher**
+4. Click **Save**
+
+#### gcloud CLI
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
