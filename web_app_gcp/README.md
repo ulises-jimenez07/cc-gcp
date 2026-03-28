@@ -20,6 +20,93 @@ We build one application across five versions:
 
 ---
 
+## Architecture Evolution
+
+### v1 — The Monolith
+Single VM hosting everything.
+```mermaid
+graph TD
+    User([User]) --> VM[Compute Engine VM]
+    subgraph VM
+        App[FastAPI App]
+        DB[(MariaDB)]
+        FS[Local Disk]
+        App --> DB
+        App --> FS
+    end
+```
+
+### v2 — Decoupled Database
+Database migrated to a managed service.
+```mermaid
+graph TD
+    User([User]) --> VM[Compute Engine VM]
+    subgraph GCP
+        subgraph VM
+            App[FastAPI App]
+            FS[Local Disk]
+            App --> FS
+        end
+        DB[(Cloud SQL MySQL)]
+        App -- Private IP --- DB
+    end
+```
+
+### v3 — Scalable Storage & Caching
+Horizontal scaling (MIG), shared storage (GCS), and sub-millisecond caching (Redis).
+```mermaid
+graph TD
+    User([User]) --> LB[HTTP Load Balancer]
+    LB --> MIG[Managed Instance Group]
+    subgraph MIG
+        VM1[VM]
+        VM2[VM]
+    end
+    subgraph GCP
+        VM1 & VM2 --- GCS[Cloud Storage]
+        VM1 & VM2 --- Redis[Memorystore Redis]
+        VM1 & VM2 --- DB[(Cloud SQL)]
+    end
+```
+
+### v4 — Event-Driven Architecture
+Offloading heavy tasks (thumbnail generation) to background workers via Pub/Sub.
+```mermaid
+graph TD
+    User([User]) --> LB[HTTP Load Balancer]
+    LB --> MIG[Managed Instance Group]
+    subgraph GCP
+        MIG --- GCS[Cloud Storage]
+        MIG --- Redis[Memorystore Redis]
+        MIG --- DB[(Cloud SQL)]
+        MIG -- Publishes --- PS[Pub/Sub]
+        PS -- Triggers --- CF[Cloud Run Function]
+        CF -- "Thumbnails" --- GCS
+    end
+```
+
+### v5 — Modern Infrastructure
+Containerized deployment on serverless (Cloud Run) or orchestrated (GKE) clusters with automated CI/CD.
+```mermaid
+graph TD
+    User([User]) --> LB[HTTP Load Balancer]
+    LB --> CR["Cloud Run / GKE\n(Containers)"]
+    subgraph GCP
+        CR --- GCS[Cloud Storage]
+        CR --- Redis[Memorystore Redis]
+        CR --- DB[(Cloud SQL)]
+        CR -- Publishes --- PS[Pub/Sub]
+        PS -- Triggers --- CF[Cloud Run Function]
+        
+        subgraph CI/CD
+            CB["Cloud Build\n(CI/CD)"] --> AR[Artifact Registry]
+            AR --> CR
+        end
+    end
+```
+
+---
+
 ## Tutorials
 
 ### Phase 1 — The Monolith & Horizontal Growth
