@@ -157,8 +157,8 @@ app/
 
 ## Prerequisites
 
-- A GCP project with billing enabled
-- `gcloud` CLI installed and authenticated (`gcloud auth login`)
+- A GCP project with billing enabled (see [root README](../README.md#prerequisites) for setup)
+- `gcloud` CLI installed and authenticated
 - Python 3.11+ (for local development)
 - Basic familiarity with FastAPI and SQL
 
