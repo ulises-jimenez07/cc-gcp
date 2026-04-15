@@ -1,0 +1,62 @@
+# Cloud Build pipeline for ML CI/CD.
+# Used in Tutorial 4.2: CI/CD for ML (GitOps).
+#
+# Trigger: push to main branch
+# Steps:
+#   1. Build training container and push to Artifact Registry
+#   2. Install SDK dependencies
+#   3. Compile and submit the Vertex AI Pipeline
+#
+# Required substitutions (set in Cloud Build trigger):
+#   _IMAGE_URI  — full Artifact Registry image URI including tag
+#   _BUCKET     — GCS bucket for ML artifacts
+#
+# Example:
+#   gcloud builds submit \
+#     --config=ai_ml_gcp/scripts/training/cloudbuild.yaml \
+#     --substitutions=_IMAGE_URI=us-central1-docker.pkg.dev/PROJECT/ml-repo/trainer:$SHORT_SHA,_BUCKET=ml-artifacts-PROJECT
+
+steps:
+  # ── Step 1: Build the training container ──────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-image
+    args:
+      - build
+      - '-t'
+      - '$_IMAGE_URI'
+      - 'ai_ml_gcp/scripts/training/'
+
+  # ── Step 2: Push to Artifact Registry ─────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-image
+    waitFor: ['build-image']
+    args:
+      - push
+      - '$_IMAGE_URI'
+
+  # ── Step 3: Compile and submit the Vertex AI Pipeline ─────────────────────
+  - name: 'python:3.10-slim'
+    id: run-pipeline
+    waitFor: ['push-image']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install kfp google-cloud-aiplatform --quiet --upgrade
+
+        python3 ai_ml_gcp/scripts/pipelines/run_pipeline.py \
+          --project=$PROJECT_ID \
+          --bucket=$_BUCKET \
+          --image=$_IMAGE_URI \
+          --region=us-central1 \
+          --wait
+
+substitutions:
+  _IMAGE_URI: 'us-central1-docker.pkg.dev/$PROJECT_ID/ml-repo/trainer:$SHORT_SHA'
+  _BUCKET: 'ml-artifacts-$PROJECT_ID'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '3600s'   # 1 hour max — Vertex AI Pipeline can take a while

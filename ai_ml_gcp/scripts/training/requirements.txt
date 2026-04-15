@@ -1,0 +1,6 @@
+scikit-learn==1.4.2
+pandas==2.2.2
+joblib==1.4.2
+google-cloud-bigquery==3.23.1
+db-dtypes==1.3.0
+hypertune==1.0.3
