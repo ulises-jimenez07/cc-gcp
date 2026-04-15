@@ -3,7 +3,7 @@
 A collection of hands-on tutorial series for building real-world systems on Google Cloud Platform, organized by domain.
 
 **Author:** Ulises Jimenez
-**Last updated:** 2026-03-27
+**Last updated:** 2026-04-15
 
 ---
 
