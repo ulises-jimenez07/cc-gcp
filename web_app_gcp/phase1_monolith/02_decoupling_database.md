@@ -185,7 +185,7 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v2
-Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
+Environment=DB_HOST=$CLOUD_SQL_IP
 Environment=DB_USER=app_user
 Environment=DB_PASS=StrongPassword123!
 Environment=DB_NAME=app_db
