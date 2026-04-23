@@ -22,30 +22,44 @@ graph LR
 
 ## 1. Enable Private Service Access (prerequisite for Private IP)
 
-Cloud SQL Private IP requires VPC peering with Google's services network. You only need to do this once per VPC.
+Cloud SQL instances with Private IP live inside **Google's managed services VPC**, not your own VPC. To route traffic between the two without leaving Google's network, you need **VPC Network Peering** — this is what Private Service Access sets up.
+
+The process has two parts:
+
+1. **Allocate an IP range** — reserve a block of private IP addresses in your VPC that Google can use for its managed services (Cloud SQL, Memorystore, etc.). This range must not overlap with any existing subnets.
+2. **Create the peering connection** — establish the VPC peering between your `default` network and `servicenetworking.googleapis.com`, using the range you just allocated.
+
+Both steps are required. You only need to do this once per VPC; all future Cloud SQL Private IP instances in the same VPC reuse this peering.
 
 ### Console
 
 > **API**: If prompted, enable the **Cloud SQL Admin API** and **Service Networking API**.
 
+**Step 1 — Allocate an IP range:**
+
 1. **VPC Network > Private Service Access**
 2. Click **Allocate IP Range**
    - Name: `google-managed-services-default`
-   - Automatic range allocation: checked
+   - IP range: **Custom** — enter a prefix length of **16** (this allocates a `/16` block, e.g. `10.100.0.0/16`)
 3. Click **Create**
-4. Click **Create Connection**, select the allocated range, click **Connect**
+
+**Step 2 — Create the peering connection:**
+
+4. Click **Create Connection**
+5. Select the range you just created (`google-managed-services-default`)
+6. Click **Connect**
 
 ### gcloud CLI
 
 ```bash
-# 1. Allocate a /16 range in the default VPC
+# Step 1: Allocate a /16 range in the default VPC for Google-managed services
 gcloud compute addresses create google-managed-services-default \
   --global \
   --purpose=VPC_PEERING \
   --prefix-length=16 \
   --network=default
 
-# 2. Create the peering connection
+# Step 2: Create the VPC peering connection to Google's service networking
 gcloud services vpc-peerings connect \
   --service=servicenetworking.googleapis.com \
   --ranges=google-managed-services-default \
