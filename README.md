@@ -30,15 +30,7 @@ Before starting any tutorial, ensure you have a GCP project and your environment
 6. Click **Create**.
 
 ### 2. Authenticate and Set Up CLI
-1. Run the following commands to authenticate your account and set up Application Default Credentials:
-   ```bash
-   gcloud auth login
-   gcloud auth application-default login
-   ```
-2. Set the default project for your current work:
-   ```bash
-   gcloud config set project <PROJECT_ID>
-   ```
+Follow the [Google Cloud Workspace Setup Guide](./gcloud_workspace_setup.md) to authenticate your account, initialize a configuration, and set up your Application Default Credentials.
 
 ### 3. Other Requirements
 - A GCP project with billing enabled.
