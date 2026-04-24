@@ -226,9 +226,12 @@ EXTERNAL_IP=<YOUR_VM_IP>
 # Health check
 curl http://$EXTERNAL_IP:3000/health
 
+# Download a demo photo for testing
+curl -o /tmp/demo-photo.jpg https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bikesg.jpg/320px-Bikesg.jpg
+
 # Upload an image
 curl -X POST http://$EXTERNAL_IP:3000/upload \
-  -F "image=@/path/to/local/photo.jpg"
+  -F "image=@/tmp/demo-photo.jpg"
 
 # List uploaded images
 curl http://$EXTERNAL_IP:3000/images
