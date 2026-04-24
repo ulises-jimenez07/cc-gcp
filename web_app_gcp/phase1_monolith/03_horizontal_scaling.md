@@ -36,20 +36,23 @@ sudo systemctl status image-app
 If you need to update the service file (e.g., to point to v2):
 
 ```bash
-sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance \
+  --format='get(ipAddresses[0].ipAddress)')
+
+sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
 [Unit]
 Description=Image App (FastAPI)
 After=network.target
 
 [Service]
 Type=simple
-User=<YOUR_USER>
-WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v2
-ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v2/venv/bin/uvicorn \
+User=$USER
+WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v2
+ExecStart=/home/$USER/cc-gcp/web_app_gcp/app/v2/venv/bin/uvicorn \
   --host 0.0.0.0 --port 3000 app:app
 Restart=on-failure
 Environment=PORT=3000
-Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
+Environment=DB_HOST=$CLOUD_SQL_IP
 Environment=DB_USER=app_user
 Environment=DB_PASS=StrongPassword123!
 Environment=DB_NAME=app_db
@@ -201,7 +204,6 @@ gcloud compute target-http-proxies create app-http-proxy \
   --url-map=app-url-map
 
 gcloud compute forwarding-rules create app-forwarding-rule \
-  --address-type=EXTERNAL \
   --global \
   --target-http-proxy=app-http-proxy \
   --ports=80
