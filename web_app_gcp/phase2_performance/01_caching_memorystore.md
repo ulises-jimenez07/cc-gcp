@@ -82,33 +82,37 @@ gcloud redis instances describe metadata-cache \
 
 ---
 
-## 4. Update the app to v3
+## 4. Deploy v3 to the MIG
 
-Get the Private IP of the Cloud SQL instance (created in the previous tutorial):
+### 4a. Prepare v3 on `monolith-server`
+
+Get the private IPs you'll need for the systemd service:
 
 ```bash
+# Cloud SQL private IP (created in Tutorial 1.2)
 gcloud sql instances describe app-db-instance \
   --format='get(ipAddresses[0].ipAddress)'
+
+# Memorystore Redis private IP (created in step 3 above)
+gcloud redis instances describe metadata-cache \
+  --region=us-central1 \
+  --format='get(host)'
 ```
 
-Switch the app on your VM (or update the Instance Template for the MIG) to `v3`:
+SSH in, install v3 dependencies, and update the systemd service with both `REDIS_HOST` and `GCS_BUCKET`:
 
 ```bash
 gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
 ```bash
+CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
+REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+
 cd ~/cc-gcp/web_app_gcp/app/v3
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-Update the systemd service to add the new env vars:
-
-```bash
-CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
-REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
 
 sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
 [Unit]
@@ -138,6 +142,91 @@ sudo systemctl daemon-reload
 sudo systemctl restart image-app
 ```
 
+Verify the service is healthy before imaging:
+
+```bash
+curl localhost:3000/health
+# { "status": "ok", "version": "v3", "db": "cloud-sql", "cache": "memorystore", "storage": "gcs" }
+exit
+```
+
+### 4b. Create the v3 machine image
+
+```bash
+# Stop the VM for a consistent snapshot
+gcloud compute instances stop monolith-server --zone=us-central1-a
+
+gcloud compute images create app-v3-image \
+  --source-disk=monolith-server \
+  --source-disk-zone=us-central1-a
+
+# Restart the original VM
+gcloud compute instances start monolith-server --zone=us-central1-a
+```
+
+### 4c. Create instance template v3
+
+```bash
+gcloud compute instance-templates create app-template-v3 \
+  --machine-type=e2-small \
+  --image=app-v3-image \
+  --image-project=$(gcloud config get-value project) \
+  --tags=http-server
+```
+
+### 4d. MIG update strategies
+
+Before rolling out, understand your options:
+
+| Strategy | Command | Downtime | When to use |
+|---|---|---|---|
+| **Rolling update** | `rolling-action start-update` | None | Default for production — replaces instances one batch at a time |
+| **Canary deployment** | `start-update --canary-version` | None | Validate the new version on a small slice of traffic before full rollout |
+| **Restart** | `rolling-action restart` | None | Same image, restart processes — for config-only changes |
+| **Replace** | `rolling-action replace` | Brief | Force-delete and immediately recreate all instances |
+
+**Rolling update** is the safest default. Two parameters control the pace:
+
+- `--max-surge=N` — extra instances to create *above* the current size during the update (default: 1). Higher = faster rollout, more cost.
+- `--max-unavailable=N` — instances that may be down simultaneously (default: 1). Set to `0` for strict zero-downtime.
+
+**Canary deployment** keeps the old version on most instances while the new version handles a fixed percentage. Once you've confirmed the new version behaves correctly, you complete the rollout:
+
+```bash
+# Phase 1 — send 20 % of traffic to v3, keep 80 % on v2
+gcloud compute instance-groups managed rolling-action start-update app-mig \
+  --version=template=app-template-v2 \
+  --canary-version=template=app-template-v3,target-size=20% \
+  --zone=us-central1-a
+
+# Phase 2 — complete the rollout once v3 looks healthy
+gcloud compute instance-groups managed rolling-action start-update app-mig \
+  --version=template=app-template-v3 \
+  --zone=us-central1-a
+```
+
+### 4e. Apply the rolling update
+
+```bash
+gcloud compute instance-groups managed rolling-action start-update app-mig \
+  --version=template=app-template-v3 \
+  --max-surge=1 \
+  --max-unavailable=0 \
+  --zone=us-central1-a
+```
+
+Monitor progress:
+
+```bash
+# Returns "true" once all instances have reached the new version
+gcloud compute instance-groups managed describe app-mig \
+  --zone=us-central1-a \
+  --format='get(status.versionTarget.isReached)'
+
+# Watch each instance's currentAction in real time
+watch -n5 "gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a"
+```
+
 ---
 
 ## 5. How the Cache-Aside code works
@@ -145,6 +234,15 @@ sudo systemctl restart image-app
 The key logic in `app/v3/app.py`:
 
 ```python
+import redis as redis_lib
+
+# REDIS_HOST is injected as an Environment= line in the systemd service (see §4a)
+redis = redis_lib.Redis(
+    host=os.environ.get('REDIS_HOST', '127.0.0.1'),
+    port=6379,
+    decode_responses=True,
+)
+
 CACHE_KEY = 'images:all'
 CACHE_TTL = 60  # seconds
 

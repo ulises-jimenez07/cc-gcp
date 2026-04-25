@@ -73,60 +73,43 @@ gsutil rm gs://$BUCKET_NAME/test.txt
 
 ## 3. Grant the VM's service account access to GCS
 
-Your VM uses its default service account to authenticate with GCS. Grant it the necessary role.
-
-First, find the VM's service account email:
-
-1. **Compute Engine > VM Instances > monolith-server**
-2. Under **Service accounts**, note the email — it looks like `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+All VMs in the MIG share the service account defined in the instance template. Find it and grant it the `Storage Object Admin` role on the bucket.
 
 ### Console
 
-1. **Cloud Storage > Buckets > `my-app-images-PROJECT_ID` > Permissions > Grant Access**
-2. **New principals**: paste the service account email
-3. **Role**: Storage > Storage Object Admin
-4. Click **Save**
+1. **Compute Engine > Instance Templates > app-template-v3**
+2. Under **Identity and API access > Service account**, note the email — it looks like `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+3. **Cloud Storage > Buckets > `my-app-images-PROJECT_ID` > Permissions > Grant Access**
+4. **New principals**: paste the service account email
+5. **Role**: Storage > Storage Object Admin
+6. Click **Save**
 
 ### gcloud CLI
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
 
-# Get the service account email used by the VM
-SA_EMAIL=$(gcloud compute instances describe monolith-server \
-  --zone=us-central1-a \
-  --format='get(serviceAccounts[0].email)')
+# Get the service account email from the instance template
+SA_EMAIL=$(gcloud compute instance-templates describe app-template-v3 \
+  --format='get(properties.serviceAccounts[0].email)')
 
-echo "VM service account: $SA_EMAIL"
+echo "MIG service account: $SA_EMAIL"
 
-# Grant Storage Object Admin on the specific bucket
+# Grant Storage Object Admin on the bucket
 gsutil iam ch serviceAccount:$SA_EMAIL:objectAdmin gs://$BUCKET_NAME
 ```
 
-*Note: if you're using a MIG, all VMs share the same service account defined in the instance template.*
-
 ---
 
-## 4. Deploy v3 with GCS storage
+## 4. Verify GCS configuration on the MIG
 
-The v3 app already handles GCS uploads (see [app/v3/app.js](../app/v3/app.js)). Update the `GCS_BUCKET` environment variable on the VM:
+The v3 app already handles GCS uploads (see [app/v3/app.py](../app/v3/app.py)).
 
-```bash
-gcloud compute ssh monolith-server --zone=us-central1-a
-```
+If you completed Tutorial 2.1, `app-template-v3` already includes `Environment=GCS_BUCKET=my-app-images` baked into the machine image. **Verify that value matches the bucket name you created in step 1** — if you added a project-ID suffix (`my-app-images-PROJECT_ID`), the names will differ.
 
-```bash
-# Edit the systemd service
-sudo nano /etc/systemd/system/image-app.service
+If the names differ, SSH into `monolith-server`, update the `GCS_BUCKET` line in `/etc/systemd/system/image-app.service`, create a new machine image (`app-v3-cdn-image`), create a new instance template (`app-template-v3-cdn`), and roll it out — follow the same pattern from [Tutorial 2.1 §4](./01_caching_memorystore.md#4-deploy-v3-to-the-mig).
 
-# Update/add this line:
-# Environment=GCS_BUCKET=my-app-images-YOUR_PROJECT_ID
-
-sudo systemctl daemon-reload
-sudo systemctl restart image-app
-```
-
-Test an upload:
+Test an upload via the load balancer:
 
 ```bash
 LB_IP=<YOUR_LB_IP>
