@@ -64,7 +64,6 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable image-app
 sudo systemctl start image-app
-sudo systemctl status image-app
 ```
 
 ---

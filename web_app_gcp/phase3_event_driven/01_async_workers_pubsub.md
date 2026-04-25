@@ -126,49 +126,9 @@ The published message format:
 }
 ```
 
-Update the app on the VM:
+### 4a. Prepare v4 on `monolith-server`
 
-```bash
-gcloud compute ssh monolith-server --zone=us-central1-a
-```
-
-```bash
-cd ~/cc-gcp/web_app_gcp/app/v4
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Update systemd service
-sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
-[Unit]
-Description=Image App (FastAPI v4)
-After=network.target
-
-[Service]
-Type=simple
-User=<YOUR_USER>
-WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v4
-ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v4/venv/bin/uvicorn \
-  --host 0.0.0.0 --port 3000 app:app
-Restart=on-failure
-Environment=PORT=3000
-Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
-Environment=DB_USER=app_user
-Environment=DB_PASS=StrongPassword123!
-Environment=DB_NAME=app_db
-Environment=GCS_BUCKET=my-app-images-<PROJECT_ID>
-Environment=REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
-Environment=PUBSUB_TOPIC=image-upload
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl restart image-app
-```
-
-*Note: the VM's service account needs the `roles/pubsub.publisher` role to publish messages.*
+First, grant the VM's service account the `roles/pubsub.publisher` role. All MIG instances share this service account, so the permission applies to every VM in the group.
 
 #### Console
 
@@ -183,13 +143,147 @@ sudo systemctl restart image-app
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
 
-SA_EMAIL=$(gcloud compute instances describe monolith-server \
-  --zone=us-central1-a \
-  --format='get(serviceAccounts[0].email)')
+SA_EMAIL=$(gcloud compute instance-templates describe app-template-v3 \
+  --format='get(properties.serviceAccounts[0].email)')
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$SA_EMAIL" \
   --role="roles/pubsub.publisher"
+```
+
+Get the private IPs you'll need for the systemd service:
+
+```bash
+# Cloud SQL private IP (created in Tutorial 1.2)
+gcloud sql instances describe app-db-instance \
+  --format='get(ipAddresses[0].ipAddress)'
+
+# Memorystore Redis private IP (created in Tutorial 2.1)
+gcloud redis instances describe metadata-cache \
+  --region=us-central1 \
+  --format='get(host)'
+```
+
+SSH in, install v4 dependencies, and update the systemd service:
+
+```bash
+gcloud compute ssh monolith-server --zone=us-central1-a
+```
+
+```bash
+CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
+REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+BUCKET_NAME=my-app-images-$(gcloud config get-value project)
+
+cd ~/cc-gcp/web_app_gcp/app/v4
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
+[Unit]
+Description=Image App (FastAPI v4)
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v4
+ExecStart=/home/$USER/cc-gcp/web_app_gcp/app/v4/venv/bin/uvicorn \
+  --host 0.0.0.0 --port 3000 app:app
+Restart=on-failure
+Environment=PORT=3000
+Environment=DB_HOST=$CLOUD_SQL_IP
+Environment=DB_USER=app_user
+Environment=DB_PASS=StrongPassword123!
+Environment=DB_NAME=app_db
+Environment=GCS_BUCKET=$BUCKET_NAME
+Environment=REDIS_HOST=$REDIS_HOST
+Environment=PUBSUB_TOPIC=image-upload
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable image-app   # auto-start on boot — required before imaging
+sudo systemctl restart image-app
+```
+
+Verify the service is healthy before imaging:
+
+```bash
+curl localhost:3000/health
+# { "status": "ok", "version": "v4", "db": "cloud-sql", "cache": "memorystore", "storage": "gcs" }
+exit
+```
+
+### 4b. Create the v4 machine image
+
+```bash
+# Stop the VM for a consistent snapshot
+gcloud compute instances stop monolith-server --zone=us-central1-a
+
+gcloud compute images create app-v4-image \
+  --source-disk=monolith-server \
+  --source-disk-zone=us-central1-a
+
+# Restart the original VM
+gcloud compute instances start monolith-server --zone=us-central1-a
+```
+
+### 4c. Create instance template v4
+
+```bash
+gcloud compute instance-templates create app-template-v4 \
+  --machine-type=e2-small \
+  --image=app-v4-image \
+  --image-project=$(gcloud config get-value project) \
+  --tags=http-server
+```
+
+### 4d. MIG update strategies
+
+See [Tutorial 2.1 §4d](../phase2_performance/01_caching_memorystore.md#4d-mig-update-strategies) for a full description of Rolling update, Canary deployment, Restart, and Replace strategies.
+
+### 4e. Apply the rolling update
+
+```bash
+gcloud compute instance-groups managed rolling-action start-update app-mig \
+  --version=template=app-template-v4 \
+  --max-surge=1 \
+  --max-unavailable=0 \
+  --zone=us-central1-a
+```
+
+Monitor progress:
+
+```bash
+# Returns "true" once all instances have reached the new version
+gcloud compute instance-groups managed describe app-mig \
+  --zone=us-central1-a \
+  --format='get(status.versionTarget.isReached)'
+
+# Watch each instance's currentAction in real time
+
+# Linux (watch is built-in)
+watch -n5 "gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a"
+
+# macOS — install watch via Homebrew, then use the same command
+brew install watch
+watch -n5 "gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a"
+
+# macOS / Linux — no dependencies (shell loop fallback)
+while true; do
+  gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a
+  sleep 5
+done
+
+# Windows (PowerShell)
+while ($true) {
+  gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a
+  Start-Sleep 5
+}
 ```
 
 ---
@@ -301,4 +395,4 @@ gcloud pubsub subscriptions create image-upload-sub \
 
 ## Next steps
 
-- [Tutorial 4.1: Containerization & Cloud Run](../phase4_containers/01_containerization_cloud_run.md) — package the app as a Docker container
+- [Tutorial 3.2: Destroy Infrastructure](02_destroy_infrastructure.md) — clean up all VMs and infrastructure created up to this point before moving to containers.

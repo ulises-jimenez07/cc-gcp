@@ -105,7 +105,7 @@ gsutil iam ch serviceAccount:$SA_EMAIL:objectAdmin gs://$BUCKET_NAME
 
 The v3 app already handles GCS uploads (see [app/v3/app.py](../app/v3/app.py)).
 
-If you completed Tutorial 2.1, `app-template-v3` already includes `Environment=GCS_BUCKET=my-app-images` baked into the machine image. **Verify that value matches the bucket name you created in step 1** — if you added a project-ID suffix (`my-app-images-PROJECT_ID`), the names will differ.
+If you completed Tutorial 2.1, `app-template-v3` already includes `Environment=GCS_BUCKET=my-app-images-PROJECT_ID` baked into the machine image. **Verify that value matches the bucket name you created in step 1** — both use `my-app-images-$(gcloud config get-value project)`, so they should match as long as you ran both tutorials in the same project.
 
 If the names differ, SSH into `monolith-server`, update the `GCS_BUCKET` line in `/etc/systemd/system/image-app.service`, create a new machine image (`app-v3-cdn-image`), create a new instance template (`app-template-v3-cdn`), and roll it out — follow the same pattern from [Tutorial 2.1 §4](./01_caching_memorystore.md#4-deploy-v3-to-the-mig).
 

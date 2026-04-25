@@ -108,6 +108,7 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```bash
 CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
 REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 cd ~/cc-gcp/web_app_gcp/app/v3
 python3.11 -m venv venv
@@ -131,7 +132,7 @@ Environment=DB_HOST=$CLOUD_SQL_IP
 Environment=DB_USER=app_user
 Environment=DB_PASS=StrongPassword123!
 Environment=DB_NAME=app_db
-Environment=GCS_BUCKET=my-app-images
+Environment=GCS_BUCKET=$BUCKET_NAME
 Environment=REDIS_HOST=$REDIS_HOST
 
 [Install]
@@ -139,6 +140,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
+sudo systemctl enable image-app   # auto-start on boot — required before imaging
 sudo systemctl restart image-app
 ```
 
@@ -224,7 +226,25 @@ gcloud compute instance-groups managed describe app-mig \
   --format='get(status.versionTarget.isReached)'
 
 # Watch each instance's currentAction in real time
+
+# Linux (watch is built-in)
 watch -n5 "gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a"
+
+# macOS — install watch via Homebrew, then use the same command
+brew install watch
+watch -n5 "gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a"
+
+# macOS / Linux — no dependencies (shell loop fallback)
+while true; do
+  gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a
+  sleep 5
+done
+
+# Windows (PowerShell)
+while ($true) {
+  gcloud compute instance-groups managed list-instances app-mig --zone=us-central1-a
+  Start-Sleep 5
+}
 ```
 
 ---
