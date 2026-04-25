@@ -84,6 +84,13 @@ gcloud redis instances describe metadata-cache \
 
 ## 4. Update the app to v3
 
+Get the Private IP of the Cloud SQL instance (created in the previous tutorial):
+
+```bash
+gcloud sql instances describe app-db-instance \
+  --format='get(ipAddresses[0].ipAddress)'
+```
+
 Switch the app on your VM (or update the Instance Template for the MIG) to `v3`:
 
 ```bash
@@ -100,25 +107,28 @@ pip install -r requirements.txt
 Update the systemd service to add the new env vars:
 
 ```bash
-sudo tee /etc/systemd/system/image-app.service > /dev/null << 'EOF'
+CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
+REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+
+sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
 [Unit]
 Description=Image App (FastAPI v3)
 After=network.target
 
 [Service]
 Type=simple
-User=<YOUR_USER>
-WorkingDirectory=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v3
-ExecStart=/home/<YOUR_USER>/cc-gcp/web_app_gcp/app/v3/venv/bin/uvicorn \
+User=$USER
+WorkingDirectory=/home/$USER/cc-gcp/web_app_gcp/app/v3
+ExecStart=/home/$USER/cc-gcp/web_app_gcp/app/v3/venv/bin/uvicorn \
   --host 0.0.0.0 --port 3000 app:app
 Restart=on-failure
 Environment=PORT=3000
-Environment=DB_HOST=<CLOUD_SQL_PRIVATE_IP>
+Environment=DB_HOST=$CLOUD_SQL_IP
 Environment=DB_USER=app_user
 Environment=DB_PASS=StrongPassword123!
 Environment=DB_NAME=app_db
 Environment=GCS_BUCKET=my-app-images
-Environment=REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+Environment=REDIS_HOST=$REDIS_HOST
 
 [Install]
 WantedBy=multi-user.target
