@@ -48,3 +48,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Instructor-local files (docs, scripts) — never commit
+_*
