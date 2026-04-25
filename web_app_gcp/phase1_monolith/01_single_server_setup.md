@@ -40,6 +40,7 @@ gcloud compute instances create monolith-server \
   --image-project=debian-cloud \
   --boot-disk-size=20GB \
   --tags=http-server \
+  --scopes=cloud-platform \
   --metadata=startup-script='#! /bin/bash
     apt-get update'
 ```

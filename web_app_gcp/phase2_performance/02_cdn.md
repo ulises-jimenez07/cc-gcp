@@ -90,8 +90,16 @@ All VMs in the MIG share the service account defined in the instance template. F
 PROJECT_ID=$(gcloud config get-value project)
 
 # Get the service account email from the instance template
+# Note: gcloud stores the default Compute SA as the alias "default", not the full email.
+# The block below resolves that alias to the actual address.
 SA_EMAIL=$(gcloud compute instance-templates describe app-template-v3 \
   --format='get(properties.serviceAccounts[0].email)')
+
+if [ "$SA_EMAIL" = "default" ]; then
+  PROJECT_NUMBER=$(gcloud projects describe "$(gcloud config get-value project)" \
+    --format='get(projectNumber)')
+  SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+fi
 
 echo "MIG service account: $SA_EMAIL"
 

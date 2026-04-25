@@ -114,7 +114,8 @@ gcloud compute instance-templates create app-template-v2 \
   --machine-type=e2-small \
   --image=app-v2-image \
   --image-project=$(gcloud config get-value project) \
-  --tags=http-server
+  --tags=http-server \
+  --scopes=cloud-platform
 ```
 
 ---

@@ -173,7 +173,8 @@ gcloud compute instance-templates create app-template-v3 \
   --machine-type=e2-small \
   --image=app-v3-image \
   --image-project=$(gcloud config get-value project) \
-  --tags=http-server
+  --tags=http-server \
+  --scopes=cloud-platform
 ```
 
 ### 4d. MIG update strategies
