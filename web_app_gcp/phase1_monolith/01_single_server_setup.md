@@ -227,7 +227,7 @@ EXTERNAL_IP=<YOUR_VM_IP>
 curl http://$EXTERNAL_IP:3000/health
 
 # Download a demo photo for testing
-curl -o /tmp/demo-photo.jpg https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bikesg.jpg/320px-Bikesg.jpg
+curl -L -o /tmp/demo-photo.jpg https://picsum.photos/1024/768
 
 # Upload an image
 curl -X POST http://$EXTERNAL_IP:3000/upload \
