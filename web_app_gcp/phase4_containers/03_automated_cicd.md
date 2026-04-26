@@ -4,8 +4,8 @@ Right now, deploying a new version of the app requires running several manual co
 
 ```mermaid
 graph TD
-    Dev([Developer]) -- "git push origin main" --> GH[GitHub Repository]
-    GH -- "Cloud Build Trigger fires" --> CB
+    Dev([Developer]) -- "git push ssm main" --> SSM[Secure Source Manager]
+    SSM -- "Cloud Build Trigger fires" --> CB
     subgraph CB[Cloud Build Pipeline]
         S1["Step 1: pip install"] --> S2["Step 2: pytest"]
         S2 --> S3["Step 3: docker build"]
@@ -83,38 +83,103 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 ---
 
-## 3. Connect GitHub to Cloud Build
+## 3. Provision Secure Source Manager and push code
 
-### Console
+**Secure Source Manager** is GCP's managed, single-tenant git hosting service. It integrates natively with Cloud Build without OAuth apps or third-party connections.
 
-1. **Cloud Build > Repositories > Connect Repository**
-2. Select **GitHub (Cloud Build GitHub App)**
-3. Authenticate with GitHub and select your repository
-4. Click **Connect**
+> **Note:** The SSM instance takes approximately **15–20 minutes** to provision. Start this step before moving on to the trigger.
 
-### gcloud CLI
+### Enable the API and create an instance
 
 ```bash
-# Install the Cloud Build GitHub App and create a connection
-# (The console flow is recommended for GitHub OAuth)
-gcloud builds connections create github cc-gcp-connection \
-  --region=us-central1
+PROJECT_ID=$(gcloud config get-value project)
+REGION=us-central1
+
+gcloud services enable securesourcemanager.googleapis.com
+
+gcloud source-manager instances create cc-gcp-instance \
+  --region=$REGION
 ```
+
+### Wait until the instance is ACTIVE
+
+Poll until the state changes from `CREATING` to `ACTIVE`:
+
+```bash
+watch -n 30 "gcloud source-manager instances describe cc-gcp-instance \
+  --region=$REGION --format='get(state)'"
+```
+
+Press `Ctrl+C` once the output shows `ACTIVE`.
+
+### Create the repository
+
+```bash
+gcloud source-manager repositories create cc-gcp \
+  --instance=cc-gcp-instance \
+  --region=$REGION
+```
+
+### Push the application code
+
+Get the HTTPS clone URL from the repository details and add it as a remote:
+
+```bash
+CLONE_URI=$(gcloud source-manager repositories describe cc-gcp \
+  --instance=cc-gcp-instance \
+  --region=$REGION \
+  --format='get(uris.gitHttps)')
+
+git config --global credential.helper gcloud.sh
+
+git remote add ssm $CLONE_URI
+
+git push ssm main
+```
+
+This pushes the full repository — including `app/v5/cloudbuild.yaml` — which is all Cloud Build needs to run the pipeline.
 
 ---
 
-## 4. Create the Build Trigger
+## 4. Connect Cloud Build to SSM and create the trigger
 
-### Console
+Cloud Build uses the **2nd gen connections** framework to read from SSM. The connection handles authentication between Cloud Build and your SSM instance.
+
+### Grant Cloud Build access to SSM
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='get(projectNumber)')
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:service-$PROJECT_NUMBER@gcp-sa-cloudbuild.iam.gserviceaccount.com" \
+  --role="roles/securesourcemanager.repoReader"
+```
+
+### Create the connection and link the repository
+
+```bash
+gcloud builds connections create securesourcemanager cc-gcp-connection \
+  --region=$REGION \
+  --instance=projects/$PROJECT_ID/locations/$REGION/instances/cc-gcp-instance
+
+gcloud builds repositories create cc-gcp-repo \
+  --connection=cc-gcp-connection \
+  --clone-uri=$CLONE_URI \
+  --region=$REGION
+```
+
+### Create the trigger
+
+#### Console
 
 1. **Cloud Build > Triggers > Create Trigger**
    - **Name**: `deploy-on-push`
    - **Region**: `us-central1`
    - **Event**: Push to a branch
-   - **Source**: your GitHub repo, branch `^main$`
+   - **Source (2nd gen)**: connection `cc-gcp-connection`, repository `cc-gcp-repo`, branch `^main$`
    - **Configuration**: Cloud Build configuration file
    - **Location**: Repository, `/app/v5/cloudbuild.yaml`
-2. **Substitution variables** (optional, override defaults from cloudbuild.yaml):
+2. **Substitution variables**:
    - `_REGION` = `us-central1`
    - `_REPO` = `python-app-repo`
    - `_IMAGE` = `image-app`
@@ -122,16 +187,13 @@ gcloud builds connections create github cc-gcp-connection \
    - `_CLUSTER_ZONE` = `us-central1-a`
 3. Click **Create**
 
-### gcloud CLI
+#### gcloud CLI
 
 ```bash
-PROJECT_ID=$(gcloud config get-value project)
-
 gcloud builds triggers create github \
   --name=deploy-on-push \
-  --region=us-central1 \
-  --repo-name=cc-gcp \
-  --repo-owner=YOUR_GITHUB_USERNAME \
+  --region=$REGION \
+  --repository=projects/$PROJECT_ID/locations/$REGION/connections/cc-gcp-connection/repositories/cc-gcp-repo \
   --branch-pattern='^main$' \
   --build-config=app/v5/cloudbuild.yaml \
   --substitutions='_REGION=us-central1,_REPO=python-app-repo,_IMAGE=image-app,_CLUSTER_NAME=scaling-cluster,_CLUSTER_ZONE=us-central1-a'
@@ -141,7 +203,7 @@ gcloud builds triggers create github \
 
 ## 5. Trigger a deployment
 
-Make any change to the app and push to `main`:
+Make any change to the app and push to the SSM remote:
 
 ```bash
 # Example: update the health endpoint response
@@ -149,7 +211,7 @@ Make any change to the app and push to `main`:
 
 git add app/v5/app.py
 git commit -m "chore: bump version to v5.1"
-git push origin main
+git push ssm main
 ```
 
 Watch the pipeline run:
@@ -198,7 +260,7 @@ kubectl rollout status deployment/image-app
 
 # Option B: revert the Git commit, push again, let CI/CD re-deploy
 git revert HEAD
-git push origin main
+git push ssm main
 ```
 
 *Note: Option B is preferred because it keeps the deployment state in sync with the Git history.*
@@ -258,3 +320,10 @@ You have completed the full roadmap:
 | 4.3 | Cloud Build CI/CD (push-to-deploy) |
 
 The app evolved from a single server that crashes under load, to a globally distributed, autoscaling, event-driven system — mirroring the architecture of real production systems handling millions of users.
+
+---
+
+## Next steps
+
+- [Tutorial 4.4: Destroy Container Infrastructure](./04_destroy_infrastructure.md) — clean up the Phase 4 resources to avoid costs.
+
