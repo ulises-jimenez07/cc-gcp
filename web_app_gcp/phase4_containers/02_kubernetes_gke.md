@@ -25,6 +25,30 @@ graph TD
 
 ---
 
+## 0. Prerequisites: Install gke-gcloud-auth-plugin
+
+`kubectl` requires the `gke-gcloud-auth-plugin` to authenticate with GKE clusters. Install it before creating or connecting to any cluster.
+
+### macOS / Linux (via gcloud components)
+
+```bash
+gcloud components install gke-gcloud-auth-plugin
+```
+
+### Debian / Ubuntu (apt)
+
+```bash
+sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
+```
+
+Verify the installation:
+
+```bash
+gke-gcloud-auth-plugin --version
+```
+
+---
+
 ## 1. Create the GKE Cluster
 
 ### Console
@@ -230,7 +254,7 @@ kubectl scale deployment image-app --replicas=4
 
 # Horizontal Pod Autoscaler (auto-scale based on CPU)
 kubectl autoscale deployment image-app \
-  --cpu-percent=60 \
+  --cpu=60% \
   --min=2 \
   --max=10
 
@@ -254,8 +278,6 @@ kubectl get all
 # Describe a deployment for events and conditions
 kubectl describe deployment image-app
 
-# Delete everything (for cleanup)
-kubectl delete -f app/v5/k8s/
 ```
 
 ---
