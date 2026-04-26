@@ -51,7 +51,8 @@ The Cloud Run Function needs permission to read and write objects in GCS.
    - **Display name**: `Thumbnail Worker Service Account`
    - Click **Create and Continue**
 2. **Grant this service account access to project**:
-   - Role: Storage > **Storage Object Admin**
+   - Role 1: Storage > **Storage Object Admin**
+   - Role 2: Cloud Run > **Cloud Run Invoker** (required for Eventarc to trigger the function)
    - Click **Continue**, then **Done**
 
 ### gcloud CLI
@@ -67,6 +68,11 @@ gcloud iam service-accounts create thumbnail-worker-sa \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:thumbnail-worker-sa@$PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
+
+# Grant Cloud Run Invoker (allow Eventarc/PubSub to trigger the function)
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:thumbnail-worker-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
 ```
 
 ---
@@ -77,7 +83,7 @@ The function code is in [app/v4/functions/thumbnail-worker/](../app/v4/functions
 
 ### Console
 
-> **API**: If prompted, enable the **Cloud Run API** and **Cloud Build API** (required to deploy functions).
+> **API**: If prompted, enable the **Cloud Functions API**, **Cloud Run API**, and **Cloud Build API** (required to deploy functions).
 
 1. **Cloud Run Functions > Create Function**
 2. **Environment**: 2nd gen
@@ -93,6 +99,13 @@ The function code is in [app/v4/functions/thumbnail-worker/](../app/v4/functions
 10. Click **Deploy**
 
 ### gcloud CLI
+
+```bash
+gcloud services enable \
+  cloudfunctions.googleapis.com \
+  run.googleapis.com \
+  cloudbuild.googleapis.com
+```
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
@@ -146,6 +159,12 @@ PROJECT_ID=$(gcloud config get-value project)
 SA_EMAIL=$(gcloud compute instance-templates describe app-template-v3 \
   --format='get(properties.serviceAccounts[0].email)')
 
+if [ "$SA_EMAIL" = "default" ]; then
+  PROJECT_NUMBER=$(gcloud projects describe "$(gcloud config get-value project)" \
+    --format='get(projectNumber)')
+  SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+fi
+
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$SA_EMAIL" \
   --role="roles/pubsub.publisher"
@@ -173,7 +192,8 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```bash
 CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
 REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
-BUCKET_NAME=my-app-images-$(gcloud config get-value project)
+PROJECT_ID=$(gcloud config get-value project)
+BUCKET_NAME=my-app-images-$PROJECT_ID
 
 cd ~/cc-gcp/web_app_gcp/app/v4
 python3.11 -m venv venv
@@ -200,6 +220,7 @@ Environment=DB_NAME=app_db
 Environment=GCS_BUCKET=$BUCKET_NAME
 Environment=REDIS_HOST=$REDIS_HOST
 Environment=PUBSUB_TOPIC=image-upload
+Environment=GOOGLE_CLOUD_PROJECT=$PROJECT_ID
 
 [Install]
 WantedBy=multi-user.target
@@ -297,7 +318,7 @@ BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 # Upload an image
 curl -X POST http://$LB_IP/upload \
-  -F "image=@photo.jpg"
+  -F "image=@/tmp/demo-photo.jpg"
 ```
 
 Expected response (returns immediately, before the thumbnail is ready):
