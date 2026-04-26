@@ -226,9 +226,9 @@ With tests in place, a failing test blocks the build from proceeding to the Dock
 ```mermaid
 graph TD
     Push["git push"] --> Trigger["Cloud Build Trigger"]
-    Trigger --> NpmCI["pip install\ninstall dependencies"]
-    NpmCI --> NpmTest["pytest\nstops pipeline on failure"]
-    NpmTest --> DockerBuild["docker build\nimage tagged with $SHORT_SHA"]
+    Trigger --> PipInstall["pip install\ninstall dependencies"]
+    PipInstall --> PyTest["pytest\nstops pipeline on failure"]
+    PyTest --> DockerBuild["docker build\nimage tagged with $SHORT_SHA"]
     DockerBuild --> DockerPush["docker push\nArtifact Registry"]
     DockerPush --> GetCreds["get-credentials\nauthenticate to GKE"]
     GetCreds --> KubeDeploy["kubectl set image\nrolling update in GKE"]

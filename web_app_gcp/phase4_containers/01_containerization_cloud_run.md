@@ -1,6 +1,6 @@
 # Tutorial 4.1: Containerization & Cloud Run
 
-Managing VMs — installing Node.js, configuring pm2, creating machine images — is manual and error-prone. **Containers** package the app and all its dependencies into a single, reproducible unit that runs identically everywhere.
+Managing VMs — installing Python, configuring Gunicorn/Uvicorn, creating machine images — is manual and error-prone. **Containers** package the app and all its dependencies into a single, reproducible unit that runs identically everywhere.
 
 **Cloud Run** is a fully managed platform that runs containers without you managing any servers. It scales to zero when idle (no cost) and scales out automatically on traffic.
 
