@@ -82,8 +82,8 @@ gke-scaling-cluster-default-pool-xxxxx-xxxx     Ready    <none>   2m    v1.28.x
 Secrets store sensitive values (DB password, connection details) separately from your manifests.
 
 ```bash
-CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
-REDIS_IP=<MEMORYSTORE_PRIVATE_IP>
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance --format='get(ipAddresses[0].ipAddress)')
+REDIS_IP=$(gcloud redis instances describe metadata-cache --region=us-central1 --format='get(host)')
 BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 kubectl create secret generic app-secrets \

@@ -83,6 +83,8 @@ gcloud artifacts repositories create python-app-repo \
 
 ## 3. Configure Docker authentication
 
+This command configures your local Docker installation to use the Google Cloud CLI (`gcloud`) as a credential helper. This allows you to securely authenticate and push/pull images directly to your private Artifact Registry domain (`us-central1-docker.pkg.dev`) without needing manual passwords.
+
 ```bash
 gcloud auth configure-docker us-central1-docker.pkg.dev
 ```
@@ -118,8 +120,8 @@ gcloud artifacts docker images list \
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
 IMAGE_PATH=us-central1-docker.pkg.dev/$PROJECT_ID/python-app-repo/image-app:v5
-CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
-REDIS_IP=<MEMORYSTORE_PRIVATE_IP>
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance --format='get(ipAddresses[0].ipAddress)')
+REDIS_IP=$(gcloud redis instances describe metadata-cache --region=us-central1 --format='get(host)')
 BUCKET_NAME=my-app-images-$PROJECT_ID
 
 gcloud run deploy image-app \

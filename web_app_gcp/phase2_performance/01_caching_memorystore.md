@@ -86,19 +86,6 @@ gcloud redis instances describe metadata-cache \
 
 ### 4a. Prepare v3 on `monolith-server`
 
-Get the private IPs you'll need for the systemd service:
-
-```bash
-# Cloud SQL private IP (created in Tutorial 1.2)
-gcloud sql instances describe app-db-instance \
-  --format='get(ipAddresses[0].ipAddress)'
-
-# Memorystore Redis private IP (created in step 3 above)
-gcloud redis instances describe metadata-cache \
-  --region=us-central1 \
-  --format='get(host)'
-```
-
 SSH in, install v3 dependencies, and update the systemd service with both `REDIS_HOST` and `GCS_BUCKET`:
 
 ```bash
@@ -106,8 +93,8 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
 ```bash
-CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
-REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance --format='get(ipAddresses[0].ipAddress)')
+REDIS_HOST=$(gcloud redis instances describe metadata-cache --region=us-central1 --format='get(host)')
 BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 cd ~/cc-gcp/web_app_gcp/app/v3

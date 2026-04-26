@@ -170,19 +170,6 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --role="roles/pubsub.publisher"
 ```
 
-Get the private IPs you'll need for the systemd service:
-
-```bash
-# Cloud SQL private IP (created in Tutorial 1.2)
-gcloud sql instances describe app-db-instance \
-  --format='get(ipAddresses[0].ipAddress)'
-
-# Memorystore Redis private IP (created in Tutorial 2.1)
-gcloud redis instances describe metadata-cache \
-  --region=us-central1 \
-  --format='get(host)'
-```
-
 SSH in, install v4 dependencies, and update the systemd service:
 
 ```bash
@@ -190,8 +177,8 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 ```
 
 ```bash
-CLOUD_SQL_IP=<CLOUD_SQL_PRIVATE_IP>
-REDIS_HOST=<MEMORYSTORE_PRIVATE_IP>
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance --format='get(ipAddresses[0].ipAddress)')
+REDIS_HOST=$(gcloud redis instances describe metadata-cache --region=us-central1 --format='get(host)')
 PROJECT_ID=$(gcloud config get-value project)
 BUCKET_NAME=my-app-images-$PROJECT_ID
 
