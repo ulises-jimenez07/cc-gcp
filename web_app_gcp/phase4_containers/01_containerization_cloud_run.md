@@ -21,6 +21,21 @@ graph LR
 
 ---
 
+## 0. Enable required APIs
+
+Before starting, ensure all necessary Google Cloud APIs are enabled for this phase.
+
+```bash
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  secretmanager.googleapis.com \
+  vpcaccess.googleapis.com
+```
+
+---
+
 ## 1. Review the Dockerfile
 
 The Dockerfile is at [app/v5/Dockerfile](../app/v5/Dockerfile):
@@ -115,7 +130,33 @@ gcloud artifacts docker images list \
 
 ---
 
-## 5. Deploy to Cloud Run
+## 5. Store secrets in Secret Manager
+
+Never pass passwords as plain env vars. Use **Secret Manager** instead. This must be done **before** deploying if you plan to reference the secret in the deployment command.
+
+> **APIs**: Ensure the **Secret Manager API** is enabled.
+
+```bash
+# Create the secret
+echo -n 'StrongPassword123!' | \
+  gcloud secrets create db-password \
+    --data-file=- \
+    --replication-policy=automatic
+
+# Grant Cloud Run's service account access
+PROJECT_ID=$(gcloud config get-value project)
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='get(projectNumber)')
+
+gcloud secrets add-iam-policy-binding db-password \
+  --member="serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+---
+
+## 6. Deploy to Cloud Run
+
+Now that the image is in the registry and the database password is in Secret Manager, you can deploy.
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
@@ -138,41 +179,13 @@ gcloud run deploy image-app \
   --set-secrets="DB_PASS=db-password:latest"
 ```
 
-*Note: storing `DB_PASS` in a Secret Manager secret is best practice — see Step 6.*
-
 ### Console
 
 1. **Cloud Run > Create Service**
 2. Select the image from Artifact Registry
 3. Set region, min/max instances, memory, and environment variables
-4. Click **Create**
-
----
-
-## 6. Store secrets in Secret Manager
-
-Never pass passwords as plain env vars. Use **Secret Manager** instead:
-
-```bash
-# Create the secret
-echo -n "StrongPassword123!" | \
-  gcloud secrets create db-password \
-    --data-file=- \
-    --replication-policy=automatic
-
-# Grant Cloud Run's service account access
-PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='get(projectNumber)')
-
-gcloud secrets add-iam-policy-binding db-password \
-  --member="serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-```
-
-Then reference the secret in the deploy command with `--set-secrets`:
-
-```bash
---set-secrets="DB_PASS=db-password:latest"
-```
+4. In **Security**, add the `db-password` secret as an environment variable `DB_PASS`.
+5. Click **Create**
 
 ---
 
@@ -191,7 +204,7 @@ curl $SERVICE_URL/health
 
 # Upload an image
 curl -X POST $SERVICE_URL/upload \
-  -F "image=@photo.jpg"
+  -F "image=@/tmp/demo-photo.jpg"
 
 # List images
 curl $SERVICE_URL/images
