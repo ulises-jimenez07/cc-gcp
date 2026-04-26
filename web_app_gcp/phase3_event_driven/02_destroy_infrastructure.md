@@ -22,12 +22,12 @@ Remove the global HTTP load balancer, its components, and the static IP:
 
 ```bash
 echo "Removing load balancer..."
-gcloud compute forwarding-rules delete app-forwarding-rule --global --quiet
-gcloud compute target-http-proxies delete app-http-proxy --quiet
-gcloud compute url-maps delete app-url-map --quiet
-gcloud compute backend-services delete app-backend --global --quiet
-gcloud compute addresses delete app-lb-ip --global --quiet
-gcloud compute backend-buckets delete img-backend-bucket --quiet
+gcloud compute forwarding-rules delete app-forwarding-rule --global --quiet || true
+gcloud compute target-http-proxies delete app-http-proxy --quiet || true
+gcloud compute url-maps delete app-url-map --quiet || true
+gcloud compute backend-services delete app-backend --global --quiet || true
+gcloud compute addresses delete app-lb-ip --global --quiet || true
+gcloud compute backend-buckets delete img-backend-bucket --quiet || true
 ```
 
 ## 3. Managed Instance Group (MIG)
@@ -45,11 +45,11 @@ Remove the health check and the instance templates we used across app versions (
 
 ```bash
 echo "Removing health check and instance templates..."
-gcloud compute health-checks delete app-health-check --quiet
-gcloud compute instance-templates delete app-template-v4 --quiet
-gcloud compute instance-templates delete app-template-v3 --quiet
-gcloud compute instance-templates delete app-template-v2 --quiet
-gcloud compute instance-templates delete app-template-v1 --quiet
+    gcloud compute health-checks delete app-health-check --quiet
+    gcloud compute instance-templates delete app-template-v4 --quiet
+    gcloud compute instance-templates delete app-template-v3 --quiet
+    gcloud compute instance-templates delete app-template-v2 --quiet
+    gcloud compute instance-templates delete app-template-v1 --quiet
 ```
 
 ## 5. Monolith VM
@@ -59,6 +59,28 @@ Delete the original `monolith-server` VM we used to build and configure the appl
 ```bash
 echo "Removing monolith-server VM..."
 gcloud compute instances delete monolith-server --zone=$ZONE --quiet
+```
+
+## 6. Custom Machine Images
+
+Delete the custom VM images we created during the updates. These consume storage space and cost money:
+
+```bash
+echo "Removing custom machine images..."
+gcloud compute images delete app-v4-image --quiet || true
+gcloud compute images delete app-v3-image --quiet || true
+gcloud compute images delete app-v2-image --quiet || true
+gcloud compute images delete app-v1-image --quiet || true
+```
+
+## 7. Firewall Rules
+
+Delete the firewall rules created for the VMs and Health Checks:
+
+```bash
+echo "Removing firewall rules..."
+gcloud compute firewall-rules delete allow-app-3000 --quiet || true
+gcloud compute firewall-rules delete allow-health-checks --quiet || true
 ```
 
 ---
