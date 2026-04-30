@@ -20,7 +20,7 @@ graph TD
 ```
 
 **App version:** `v5`
-**Previous tutorial:** [4.1 Containerization & Cloud Run](./01_containerization_cloud_run.md)
+**Previous tutorial:** [4.1b Kubernetes Fundamentals on Minikube](./01b_kubernetes_fundamentals_minikube.md)
 **Next tutorial:** [4.3 Automated CI/CD](./03_automated_cicd.md)
 
 ---
