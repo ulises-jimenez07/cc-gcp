@@ -121,13 +121,6 @@ gcloud sql users create app_user \
 
 ## 4. Create the schema
 
-Get the Private IP of the Cloud SQL instance:
-
-```bash
-gcloud sql instances describe app-db-instance \
-  --format='get(ipAddresses[0].ipAddress)'
-```
-
 SSH into your VM and connect to Cloud SQL:
 
 ```bash
@@ -138,7 +131,7 @@ gcloud compute ssh monolith-server --zone=us-central1-a
 # Install mysql client if not already present
 sudo apt-get install -y default-mysql-client
 
-CLOUD_SQL_IP=<PRIVATE_IP_FROM_ABOVE>
+CLOUD_SQL_IP=$(gcloud sql instances describe app-db-instance --format='get(ipAddresses[0].ipAddress)')
 mysql -h $CLOUD_SQL_IP -u app_user -p
 ```
 
@@ -208,7 +201,7 @@ sudo systemctl status image-app
 ## 6. Verify the connection
 
 ```bash
-EXTERNAL_IP=<YOUR_VM_IP>
+EXTERNAL_IP=$(gcloud compute instances describe monolith-server --zone=us-central1-a --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 
 curl http://$EXTERNAL_IP:3000/health
 ```

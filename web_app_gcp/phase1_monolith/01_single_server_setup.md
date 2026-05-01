@@ -40,9 +40,7 @@ gcloud compute instances create monolith-server \
   --image-project=debian-cloud \
   --boot-disk-size=20GB \
   --tags=http-server \
-  --scopes=cloud-platform \
-  --metadata=startup-script='#! /bin/bash
-    apt-get update'
+  --scopes=cloud-platform 
 ```
 
 ---
@@ -144,10 +142,6 @@ export PORT=3000
 ### Keep the app running with uvicorn + systemd
 
 ```bash
-# Install fastapi[standard] inside the venv (already included in requirements.txt for v5,
-# but for v1 run: pip install "fastapi[standard]")
-pip install "fastapi[standard]"
-
 # Create a systemd service file
 sudo tee /etc/systemd/system/image-app.service > /dev/null <<EOF
 [Unit]
@@ -216,13 +210,7 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
 Get the VM's external IP:
 
 ```bash
-gcloud compute instances describe monolith-server \
-  --zone=us-central1-a \
-  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
-```
-
-```bash
-EXTERNAL_IP=<YOUR_VM_IP>
+EXTERNAL_IP=$(gcloud compute instances describe monolith-server --zone=us-central1-a --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 
 # Health check
 curl http://$EXTERNAL_IP:3000/health

@@ -300,7 +300,7 @@ while ($true) {
 ## 5. Test end-to-end
 
 ```bash
-LB_IP=<YOUR_LB_IP>
+LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
 BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 # Upload an image

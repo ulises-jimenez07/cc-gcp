@@ -279,7 +279,7 @@ redis.delete(CACHE_KEY)
 ## 6. Verify caching behavior
 
 ```bash
-LB_IP=<YOUR_LB_IP>
+LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
 
 # First call — cache miss, queries Cloud SQL
 curl http://$LB_IP/images
@@ -307,7 +307,7 @@ From a VM on the same VPC:
 # Install redis-cli
 sudo apt-get install -y redis-tools
 
-REDIS_IP=<MEMORYSTORE_PRIVATE_IP>
+REDIS_IP=$(gcloud redis instances describe metadata-cache --region=us-central1 --format='get(host)')
 
 redis-cli -h $REDIS_IP ping          # PONG
 redis-cli -h $REDIS_IP keys '*'      # list all keys

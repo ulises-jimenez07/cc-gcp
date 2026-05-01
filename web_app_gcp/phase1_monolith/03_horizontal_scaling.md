@@ -212,10 +212,23 @@ gcloud compute forwarding-rules create app-forwarding-rule \
 ### Console shortcut (all in one flow)
 
 1. **Network Services > Load Balancing > Create Load Balancer**
-2. Select **HTTP(S) Load Balancing**, then **From Internet to my VMs or serverless services**
-3. **Backend configuration**: Create a backend service → add the `app-mig` MIG → attach `app-health-check`
-4. **Frontend configuration**: Protocol HTTP, Port 80, Ephemeral IP
-5. Click **Create**
+2. Choose **Application Load Balancer (HTTP/HTTPS)** and click **Next**.
+3. Select **Public facing (external)** and click **Next**.
+4. Select **Global workloads** and click **Next**.
+5. Select **Global external Application Load Balancer** and click **Next**, then click **Configure**.
+6. Set a **Load Balancer Name**: `app-url-map`.
+7. **Frontend configuration**:
+   - Name: `app-forwarding-rule`
+   - Protocol: **HTTP**, Port: **80**, IP address: **Ephemeral**
+   - Click **Done**.
+8. **Backend configuration**:
+   - Select **Backend services & backend buckets** dropdown → **Create a backend service**.
+   - Name: `app-backend`, Backend type: **Instance group**
+   - Add the `app-mig` instance group and ensure the port is set to `3000` (matching the named port).
+   - Under Health Check, select or create `app-health-check` (HTTP, port 3000, path `/health`).
+   - Click **Done**.
+9. **Routing rules**: Keep the default **Simple host and path rule**.
+10. Click **Review and finalize**, review the setup, and click **Create**.
 
 ---
 

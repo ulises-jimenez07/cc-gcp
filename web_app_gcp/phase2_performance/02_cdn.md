@@ -120,7 +120,7 @@ If the names differ, SSH into `monolith-server`, update the `GCS_BUCKET` line in
 Test an upload via the load balancer:
 
 ```bash
-LB_IP=<YOUR_LB_IP>
+LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
 
 curl -X POST http://$LB_IP/upload \
   -F "image=@/path/to/photo.jpg"
@@ -190,7 +190,7 @@ EOF
 Upload a new image and request it via the load balancer URL:
 
 ```bash
-LB_IP=<YOUR_LB_IP>
+LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
 
 # Upload
 curl -X POST http://$LB_IP/upload -F "image=@photo.jpg"
