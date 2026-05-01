@@ -2,7 +2,7 @@
 
 As traffic grows, the same database queries run over and over — "list all images" is called on every page load. Without a cache, every request hits Cloud SQL, adding latency and increasing DB load.
 
-In this tutorial you provision a **Memorystore (Redis)** instance and implement the **Cache-Aside** pattern in the app: check Redis first, fall back to Cloud SQL on a miss, then populate the cache for next time.
+In this tutorial you provision a **Memorystore (Redis)** instance, create a **Cloud Storage (GCS)** bucket for image uploads, and implement the **Cache-Aside** pattern in the app: check Redis first, fall back to Cloud SQL on a miss, then populate the cache for next time.
 
 ```mermaid
 graph TD
@@ -82,9 +82,52 @@ gcloud redis instances describe metadata-cache \
 
 ---
 
-## 4. Deploy v3 to the MIG
+## 4. Create a Cloud Storage Bucket
 
-### 4a. Prepare v3 on `monolith-server`
+The bucket must be **publicly readable** so CDN can serve files without authentication. Create it now so the `GCS_BUCKET` environment variable is ready when you configure the v3 service in the next step.
+
+### Console
+
+1. **Cloud Storage > Buckets > Create**
+   - **Name**: `my-app-images` *(must be globally unique — append your project ID if needed)*
+   - **Location type**: Multi-region → `us`
+   - **Storage class**: Standard
+   - **Access control**: Uniform
+2. Click **Create**
+3. After creation: **Permissions > Grant Access**
+   - Principal: `allUsers`
+   - Role: `Storage Object Viewer`
+4. Click **Save** (this makes all objects publicly readable)
+
+### gcloud CLI
+
+```bash
+BUCKET_NAME=my-app-images-$(gcloud config get-value project)
+
+# Create the bucket
+gsutil mb -l us gs://$BUCKET_NAME
+
+# Make all objects publicly readable
+gsutil iam ch allUsers:objectViewer gs://$BUCKET_NAME
+
+echo "Bucket created: gs://$BUCKET_NAME"
+```
+
+### Verify
+
+```bash
+# Upload a test file and confirm it's publicly accessible
+echo "hello" > test.txt
+gsutil cp test.txt gs://$BUCKET_NAME/test.txt
+curl https://storage.googleapis.com/$BUCKET_NAME/test.txt
+gsutil rm gs://$BUCKET_NAME/test.txt
+```
+
+---
+
+## 5. Deploy v3 to the MIG
+
+### 5a. Prepare v3 on `monolith-server`
 
 SSH in, install v3 dependencies, and update the systemd service with both `REDIS_HOST` and `GCS_BUCKET`:
 
@@ -139,7 +182,7 @@ curl localhost:3000/health
 exit
 ```
 
-### 4b. Create the v3 machine image
+### 5b. Create the v3 machine image
 
 ```bash
 # Stop the VM for a consistent snapshot
@@ -153,7 +196,7 @@ gcloud compute images create app-v3-image \
 gcloud compute instances start monolith-server --zone=us-central1-a
 ```
 
-### 4c. Create instance template v3
+### 5c. Create instance template v3
 
 ```bash
 gcloud compute instance-templates create app-template-v3 \
@@ -164,7 +207,43 @@ gcloud compute instance-templates create app-template-v3 \
   --scopes=cloud-platform
 ```
 
-### 4d. MIG update strategies
+### 5d. Grant the VM's service account access to GCS
+
+All VMs in the MIG share the service account defined in the instance template. Find it and grant it the `Storage Object Admin` role on the bucket.
+
+#### Console
+
+1. **Compute Engine > Instance Templates > app-template-v3**
+2. Under **Identity and API access > Service account**, note the email — it looks like `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+3. **Cloud Storage > Buckets > `my-app-images-PROJECT_ID` > Permissions > Grant Access**
+4. **New principals**: paste the service account email
+5. **Role**: Storage > Storage Object Admin
+6. Click **Save**
+
+#### gcloud CLI
+
+```bash
+BUCKET_NAME=my-app-images-$(gcloud config get-value project)
+
+# Get the service account email from the instance template
+# Note: gcloud stores the default Compute SA as the alias "default", not the full email.
+# The block below resolves that alias to the actual address.
+SA_EMAIL=$(gcloud compute instance-templates describe app-template-v3 \
+  --format='get(properties.serviceAccounts[0].email)')
+
+if [ "$SA_EMAIL" = "default" ]; then
+  PROJECT_NUMBER=$(gcloud projects describe "$(gcloud config get-value project)" \
+    --format='get(projectNumber)')
+  SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+fi
+
+echo "MIG service account: $SA_EMAIL"
+
+# Grant Storage Object Admin on the bucket
+gsutil iam ch serviceAccount:$SA_EMAIL:objectAdmin gs://$BUCKET_NAME
+```
+
+### 5e. MIG update strategies
 
 Before rolling out, understand your options:
 
@@ -195,7 +274,7 @@ gcloud compute instance-groups managed rolling-action start-update app-mig \
   --zone=us-central1-a
 ```
 
-### 4e. Apply the rolling update
+### 5f. Apply the rolling update
 
 ```bash
 gcloud compute instance-groups managed rolling-action start-update app-mig \
@@ -237,14 +316,14 @@ while ($true) {
 
 ---
 
-## 5. How the Cache-Aside code works
+## 6. How the Cache-Aside code works
 
 The key logic in `app/v3/app.py`:
 
 ```python
 import redis as redis_lib
 
-# REDIS_HOST is injected as an Environment= line in the systemd service (see §4a)
+# REDIS_HOST is injected as an Environment= line in the systemd service (see §5a)
 redis = redis_lib.Redis(
     host=os.environ.get('REDIS_HOST', '127.0.0.1'),
     port=6379,
@@ -276,7 +355,7 @@ redis.delete(CACHE_KEY)
 
 ---
 
-## 6. Verify caching behavior
+## 7. Verify caching behavior
 
 ```bash
 LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
@@ -299,7 +378,7 @@ curl http://$LB_IP/images
 
 ---
 
-## 7. Connect to Redis directly for debugging
+## 8. Connect to Redis directly for debugging
 
 From a VM on the same VPC:
 
@@ -317,11 +396,11 @@ redis-cli -h $REDIS_IP get images:all  # see the raw cached JSON
 
 ---
 
-## 8. What changed
+## 9. What changed
 
 | | v2 | v3 |
 |--|--|--|
-| Images | Local disk | GCS (see Tutorial 2.2) |
+| Images | Local disk | GCS |
 | DB queries on every `/images` | Yes | Only on cache miss |
 | Cache TTL | N/A | 60 seconds |
 | Cache invalidation | N/A | On upload and delete |
@@ -330,4 +409,4 @@ redis-cli -h $REDIS_IP get images:all  # see the raw cached JSON
 
 ## Next steps
 
-- [Tutorial 2.2: CDN with Cloud Storage](./02_cdn.md) — fix the local disk storage problem and serve images from edge locations
+- [Tutorial 2.2: CDN with Cloud Storage](./02_cdn.md) — serve images from edge locations worldwide
