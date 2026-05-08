@@ -62,7 +62,6 @@ Download a classic dataset (Project Gutenberg book) to your cloud shell or local
 ```bash
 # Download test data
 curl -O https://www.gutenberg.org/cache/epub/20417/pg20417.txt
-wget https://www.gutenberg.org/cache/epub/20417/pg20417.txt
 
 # Upload to GCS
 gsutil cp pg20417.txt gs://$BUCKET_NAME/raw/gutenberg.txt
@@ -77,9 +76,10 @@ We will create a cluster with **Component Gateway** enabled to access the HDFS a
 ```bash
 gcloud dataproc clusters create batch-cluster \
     --region=us-central1 \
+    --zone="" \
     --num-workers=2 \
-    --master-machine-type=n1-standard-2 \
-    --worker-machine-type=n1-standard-2 \
+    --master-machine-type=e2-standard-2 \
+    --worker-machine-type=e2-medium \
     --image-version=2.1-debian11 \
     --enable-component-gateway
 ```
@@ -105,6 +105,8 @@ Inside the VM, try these commands:
 hdfs dfs -ls /
 
 # Copy data from GCS to local HDFS (rarely needed, but good for understanding)
+PROJECT_ID=$(gcloud config get-value project)
+BUCKET_NAME="${PROJECT_ID}-data-source"
 gsutil cp gs://$BUCKET_NAME/raw/gutenberg.txt /tmp/gutenberg.txt
 hdfs dfs -mkdir -p /user/raw
 hdfs dfs -put /tmp/gutenberg.txt /user/raw/
@@ -127,6 +129,27 @@ Before submitting a job to the cluster, you can test your mapper and reducer log
 cat pg20417.txt | python3 scripts/pyspark/word_count.py --mode=mapper | sort -k1,1 | python3 scripts/pyspark/word_count.py --mode=reducer | head -n 5
 ```
 
+#### Running on the Dataproc Master Node (without cloning the repo)
+
+If the repo is not cloned on the master, copy the script and input file from your local machine using `gcloud compute scp`:
+
+```bash
+# Copy the script and input file to the master node
+gcloud compute scp scripts/pyspark/word_count.py batch-cluster-m:~/ --zone=us-central1-a
+gcloud compute scp pg20417.txt batch-cluster-m:~/ --zone=us-central1-a
+```
+
+Then SSH into the master and run the simulation:
+
+```bash
+gcloud compute ssh batch-cluster-m --zone=us-central1-a
+```
+
+```bash
+# Once on the master node
+cat pg20417.txt | python3 word_count.py --mode=mapper | sort -k1,1 | python3 word_count.py --mode=reducer | head -n 5
+```
+
 ---
 
 ## 6. Submit the MapReduce Job
@@ -134,19 +157,21 @@ cat pg20417.txt | python3 scripts/pyspark/word_count.py --mode=mapper | sort -k1
 Submit the job to Dataproc using **Hadoop Streaming**. This allows us to use Python scripts as the Mapper and Reducer.
 
 ```bash
+gsutil cp scripts/pyspark/word_count.py gs://$BUCKET_NAME/scripts/word_count.py
+
 gcloud dataproc jobs submit hadoop \
   --cluster=batch-cluster \
   --region=us-central1 \
   --jar=file:///usr/lib/hadoop/hadoop-streaming.jar \
   -- \
+  -files gs://$BUCKET_NAME/scripts/word_count.py \
   -input gs://$BUCKET_NAME/raw/gutenberg.txt \
   -output gs://$BUCKET_NAME/output/wordcount/ \
-  -mapper "python3 scripts/pyspark/word_count.py --mode=mapper" \
-  -reducer "python3 scripts/pyspark/word_count.py --mode=reducer" \
-  -file scripts/pyspark/word_count.py
+  -mapper "python3 word_count.py --mode=mapper" \
+  -reducer "python3 word_count.py --mode=reducer"
 ```
 
-*Note: The `-file` flag ensures your script is distributed to all worker nodes.*
+*Note: The `-files` flag distributes the script to all worker nodes. The mapper/reducer reference just the filename (not the path) because `-files` places the script in the working directory.*
 
 ---
 
@@ -154,7 +179,7 @@ gcloud dataproc jobs submit hadoop \
 
 ```bash
 # View the results stored in GCS
-gsutil cat gs://$BUCKET_NAME/output/wordcount/part-00000 | head -n 10
+gsutil cat gs://$BUCKET_NAME/output/wordcount/part-00000 
 ```
 
 ---

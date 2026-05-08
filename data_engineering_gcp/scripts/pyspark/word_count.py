@@ -6,8 +6,11 @@ Usage (Local Simulation):
   cat file.txt | python3 word_count.py --mode=mapper | sort -k1,1 | python3 word_count.py --mode=reducer
 """
 
+import signal
 import sys
 import argparse
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 
 def mapper():
