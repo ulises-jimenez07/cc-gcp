@@ -61,6 +61,7 @@ Download a classic dataset (Project Gutenberg book) to your cloud shell or local
 
 ```bash
 # Download test data
+curl -O https://www.gutenberg.org/cache/epub/20417/pg20417.txt
 wget https://www.gutenberg.org/cache/epub/20417/pg20417.txt
 
 # Upload to GCS
