@@ -54,10 +54,12 @@ To serve GCS files through the load balancer (and enable CDN), add a **Backend B
    - Name: `img-backend-bucket`
    - Cloud Storage bucket: `my-app-images-PROJECT_ID`
    - Check **Enable Cloud CDN**
-   - Cache mode: **Cache static content**
+   - Cache mode: **Cache static content (CACHE_ALL_STATIC)**
 3. **Routing rules**: Add a new rule:
-   - Match: path prefix `/images/storage/*`
+   - Match: path prefix `/storage/*`
    - Route to: `img-backend-bucket`
+   - **Path rewrite (URL rewrite):** set **Path prefix rewrite** to `/`
+     > This strips the `/storage` prefix before forwarding to GCS. Without it, GCS receives `/storage/filename.jpg` as the object key, but the object is stored as `filename.jpg`.
 4. Click **Save**
 
 ### gcloud CLI
@@ -72,7 +74,7 @@ gcloud compute backend-buckets create img-backend-bucket \
   --enable-cdn \
   --cache-mode=CACHE_ALL_STATIC
 
-# Add a path matcher to the URL map
+# Add a path matcher with path rewrite to the URL map
 gcloud compute url-maps import app-url-map --global << 'EOF'
 defaultService: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendServices/app-backend
 name: app-url-map
@@ -87,6 +89,9 @@ pathMatchers:
   - paths:
     - /storage/*
     service: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendBuckets/img-backend-bucket
+    routeAction:
+      urlRewrite:
+        pathPrefixRewrite: /
 EOF
 ```
 
@@ -100,19 +105,41 @@ Upload a new image and request it via the load balancer URL:
 
 ```bash
 LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
-BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 # Upload
 curl -X POST http://$LB_IP/upload -F "image=@photo.jpg"
-# Note the returned GCS URL, e.g.: https://storage.googleapis.com/BUCKET/filename.jpg
+# Note the returned filename from the GCS URL, e.g.: 1712345678-photo.jpg
 
-# Access via CDN (first request — cache miss, served from GCS)
-curl -I https://storage.googleapis.com/$BUCKET_NAME/filename.jpg
+# First request: full GET (not HEAD) to populate the CDN cache
+curl -o /dev/null -D - http://$LB_IP/storage/1712345678-photo.jpg
+
+# Second request: cache hit — look for the Age header
+curl -o /dev/null -D - http://$LB_IP/storage/1712345678-photo.jpg
 ```
 
-Look for the `x-goog-cache-status` header:
-- `MISS` on the first request (fetched from GCS and cached at the edge)
-- `HIT` on subsequent requests (served from the nearest CDN node)
+> **Why `curl -o /dev/null -D -` and not `curl -I`?**  
+> `-I` sends a HEAD request. Cloud CDN may not populate the cache on HEAD requests. Use a full GET (`-o /dev/null` discards the body, `-D -` prints headers to stdout) to guarantee the object is cached.
+
+On the **second request**, look for the `Age` header — it shows how many seconds the response has been sitting in the CDN cache:
+
+```
+Age: 12
+Cache-Control: public, max-age=3600
+```
+
+> **Why no `x-goog-cache-status`?**  
+> That header only appears on the newer **Global External HTTP(S) Load Balancer**. This tutorial uses a **Classic** load balancer, which does not inject it. The CDN is still working — use the `Age` header or Cloud Logging (below) to confirm.
+
+### Confirm via Cloud Logging
+
+The most reliable way to verify CDN hits on Classic LB:
+
+```
+resource.type="http_load_balancer"
+jsonPayload.cacheId!=""
+```
+
+A log entry with `"statusDetails": "response_from_cache"` and `"cacheHit": true` confirms the CDN is serving the object from the edge.
 
 ---
 
