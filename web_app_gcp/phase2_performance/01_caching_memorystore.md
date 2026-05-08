@@ -369,7 +369,8 @@ curl http://$LB_IP/images
 # Response: { "source": "cache", "data": [...] }
 
 # Upload a new image — invalidates the cache
-curl -X POST http://$LB_IP/upload -F "image=@photo.jpg"
+curl -L -o /tmp/demo-photo.jpg https://picsum.photos/1024/768
+curl -X POST http://$LB_IP/upload -F "image=@/tmp/demo-photo.jpg"
 
 # Next call — cache miss again (invalidated), re-queries Cloud SQL
 curl http://$LB_IP/images
