@@ -74,7 +74,7 @@ gcloud compute backend-buckets create img-backend-bucket \
 
 # Add a path matcher to the URL map
 gcloud compute url-maps import app-url-map --global << 'EOF'
-defaultService: https://www.googleapis.com/compute/v1/projects/PROJECT_ID/global/backendServices/app-backend
+defaultService: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendServices/app-backend
 name: app-url-map
 hostRules:
 - hosts:
@@ -82,11 +82,11 @@ hostRules:
   pathMatcher: app-paths
 pathMatchers:
 - name: app-paths
-  defaultService: https://www.googleapis.com/compute/v1/projects/PROJECT_ID/global/backendServices/app-backend
+  defaultService: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendServices/app-backend
   pathRules:
   - paths:
     - /storage/*
-    service: https://www.googleapis.com/compute/v1/projects/PROJECT_ID/global/backendBuckets/img-backend-bucket
+    service: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendBuckets/img-backend-bucket
 EOF
 ```
 
