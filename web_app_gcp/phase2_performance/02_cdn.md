@@ -63,6 +63,7 @@ To serve GCS files through the load balancer (and enable CDN), add a **Backend B
 ### gcloud CLI
 
 ```bash
+PROJECT_ID=$(gcloud config get-value project)
 BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
 # Create the backend bucket with CDN enabled
