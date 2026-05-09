@@ -36,9 +36,10 @@ gsutil mb -l us-central1 gs://$BUCKET_NAME/
 
 gcloud dataproc clusters create spark-cluster \
   --region=us-central1 \
+  --zone="" \
   --num-workers=2 \
-  --master-machine-type=n1-standard-4 \
-  --worker-machine-type=n1-standard-4 \
+  --master-machine-type=e2-standard-2 \
+  --worker-machine-type=e2-medium \
   --image-version=2.1-debian11 \
   --enable-component-gateway \
   --optional-components=JUPYTER \
@@ -59,7 +60,6 @@ from pyspark.sql import SparkSession
 
 spark = SparkSession.builder \
   .appName("PublicDataAnalysis") \
-  .config("temporaryGcsBucket", "REPLACE_WITH_YOUR_BUCKET") \
   .getOrCreate()
 
 # Read from Austin Bikeshare Public Dataset
@@ -131,7 +131,7 @@ bq load \
 
 # Query your processed data
 bq query --use_legacy_sql=false \
-  "SELECT * FROM my_analytics.taxi_summary ORDER BY sum_tips DESC"
+  "SELECT * FROM my_analytics.taxi_summary ORDER BY total_tips DESC"
 ```
 
 ---

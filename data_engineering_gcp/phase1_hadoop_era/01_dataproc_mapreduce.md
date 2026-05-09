@@ -53,7 +53,10 @@ In modern GCP data engineering, we use GCS instead of HDFS for persistence, as G
 
 ```bash
 BUCKET_NAME="${PROJECT_ID}-data-source"
+TEMP_BUCKET="${PROJECT_ID}-spark-temp"
+
 gsutil mb -l us-central1 gs://$BUCKET_NAME/
+gsutil mb -l us-central1 gs://$TEMP_BUCKET/
 ```
 
 ### Sourcing External Data
@@ -74,14 +77,16 @@ gsutil cp pg20417.txt gs://$BUCKET_NAME/raw/gutenberg.txt
 We will create a cluster with **Component Gateway** enabled to access the HDFS and Spark web interfaces later.
 
 ```bash
-gcloud dataproc clusters create batch-cluster \
+gcloud dataproc clusters create spark-cluster \
     --region=us-central1 \
     --zone="" \
     --num-workers=2 \
     --master-machine-type=e2-standard-2 \
     --worker-machine-type=e2-medium \
     --image-version=2.1-debian11 \
-    --enable-component-gateway
+    --enable-component-gateway \
+    --optional-components=JUPYTER \
+    --temp-bucket=$TEMP_BUCKET
 ```
 
 ---
@@ -97,7 +102,7 @@ gcloud dataproc clusters create batch-cluster \
 ### Interaction with HDFS
 Connect to your master node via SSH to explore the distributed file system:
 ```bash
-gcloud compute ssh batch-cluster-m --zone=us-central1-a
+gcloud compute ssh spark-cluster-m --zone=us-central1-a
 ```
 Inside the VM, try these commands:
 ```bash
@@ -135,14 +140,14 @@ If the repo is not cloned on the master, copy the script and input file from you
 
 ```bash
 # Copy the script and input file to the master node
-gcloud compute scp scripts/pyspark/word_count.py batch-cluster-m:~/ --zone=us-central1-a
-gcloud compute scp pg20417.txt batch-cluster-m:~/ --zone=us-central1-a
+gcloud compute scp scripts/pyspark/word_count.py spark-cluster-m:~/ --zone=us-central1-a
+gcloud compute scp pg20417.txt spark-cluster-m:~/ --zone=us-central1-a
 ```
 
 Then SSH into the master and run the simulation:
 
 ```bash
-gcloud compute ssh batch-cluster-m --zone=us-central1-a
+gcloud compute ssh spark-cluster-m --zone=us-central1-a
 ```
 
 ```bash
@@ -160,7 +165,7 @@ Submit the job to Dataproc using **Hadoop Streaming**. This allows us to use Pyt
 gsutil cp scripts/pyspark/word_count.py gs://$BUCKET_NAME/scripts/word_count.py
 
 gcloud dataproc jobs submit hadoop \
-  --cluster=batch-cluster \
+  --cluster=spark-cluster \
   --region=us-central1 \
   --jar=file:///usr/lib/hadoop/hadoop-streaming.jar \
   -- \
@@ -186,10 +191,10 @@ gsutil cat gs://$BUCKET_NAME/output/wordcount/part-00000
 
 ## 8. Delete the cluster (Cost Control)
 
-Always delete your cluster after the tutorial to avoid incurring costs!
+If you are continuing to the next tutorial, **do not delete the cluster yet**. Otherwise, delete your cluster to avoid incurring costs:
 
 ```bash
-gcloud dataproc clusters delete batch-cluster --region=us-central1 --quiet
+# gcloud dataproc clusters delete spark-cluster --region=us-central1 --quiet
 ```
 
 ---
