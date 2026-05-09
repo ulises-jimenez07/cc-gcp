@@ -43,7 +43,7 @@ PROJECT_ID=$(gcloud config get-value project)
 
 bq mk \
   --dataset \
-  --location=us-central1 \
+  --location=US \
   --description="Market research using public data" \
   $PROJECT_ID:my_analytics
 ```
@@ -59,7 +59,8 @@ We will ingest only trips from 2024 that were paid by credit card.
 
 ```sql
 -- Run this in the BigQuery Console
-CREATE OR REPLACE TABLE `my_analytics.taxi_2024_credit` AS
+-- Replace YOUR_PROJECT_ID with your actual GCP project ID
+CREATE OR REPLACE TABLE `YOUR_PROJECT_ID.my_analytics.taxi_2020_credit` AS
 SELECT
   unique_key,
   trip_start_timestamp,
@@ -68,14 +69,14 @@ SELECT
   tips,
   tolls
 FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
-WHERE trip_start_timestamp >= '2024-01-01'
+WHERE trip_start_timestamp >= '2020-01-01'
   AND payment_type = 'Credit Card'
   AND fare > 0;
 ```
 
 ### Verify your "Ingested" data
 ```bash
-bq show my_analytics.taxi_2024_credit
+bq show my_analytics.taxi_2020_credit
 bq query --use_legacy_sql=false \
   "SELECT COUNT(*) as row_count FROM my_analytics.taxi_2024_credit"
 ```
@@ -108,7 +109,7 @@ LIMIT 10;
 You can JOIN different datasets (even if they are in different projects) as long as they are in the same region.
 
 ```sql
--- Correlating weather with bikeshare trips (Austing)
+-- Correlating weather with bikeshare trips (Austin)
 SELECT
   t.start_station_name,
   w.temp,
@@ -116,7 +117,7 @@ SELECT
   COUNT(*) as trip_count
 FROM `bigquery-public-data.austin_bikeshare.bikeshare_trips` t
 JOIN `bigquery-public-data.noaa_gsod.gsod2023` w
-  ON CAST(t.start_time AS DATE) = CAST(FMT_DATE('%Y-%m-%d', w.year, w.mo, w.da) AS DATE)
+  ON CAST(t.start_time AS DATE) = PARSE_DATE('%Y%m%d', CONCAT(w.year, w.mo, w.da))
 WHERE w.stn = '722540' -- Austin airport weather station
 GROUP BY 1, 2, 3
 ORDER BY trip_count DESC
@@ -149,8 +150,8 @@ gsutil mb gs://$BUCKET_NAME/
 
 bq extract \
   --destination_format=PARQUET \
-  my_analytics.taxi_2024_credit \
-  gs://$BUCKET_NAME/taxi_subset/*.parquet
+  my_analytics.taxi_2020_credit \
+  "gs://$BUCKET_NAME/taxi_subset/*.parquet"
 ```
 
 ---
