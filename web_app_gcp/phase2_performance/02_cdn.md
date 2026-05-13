@@ -75,7 +75,8 @@ gcloud compute backend-buckets create img-backend-bucket \
   --cache-mode=CACHE_ALL_STATIC
 
 # Add a path matcher with path rewrite to the URL map
-gcloud compute url-maps import app-url-map --global << 'EOF'
+# Note: unquoted EOF is required so $PROJECT_ID is expanded before being passed to gcloud
+gcloud compute url-maps import app-url-map --global << EOF
 defaultService: https://www.googleapis.com/compute/v1/projects/$PROJECT_ID/global/backendServices/app-backend
 name: app-url-map
 hostRules:
@@ -105,16 +106,29 @@ Upload a new image and request it via the load balancer URL:
 
 ```bash
 LB_IP=$(gcloud compute forwarding-rules describe app-forwarding-rule --global --format='get(IPAddress)')
+BUCKET_NAME=my-app-images-$(gcloud config get-value project)
 
-# Upload
-curl -X POST http://$LB_IP/upload -F "image=@photo.jpg"
-# Note the returned filename from the GCS URL, e.g.: 1712345678-photo.jpg
+# Download a test image and upload it, capturing the JSON response
+curl -L -o /tmp/demo-photo.jpg https://picsum.photos/1024/768
+UPLOAD_JSON=$(curl -s -X POST http://$LB_IP/upload -F "image=@/tmp/demo-photo.jpg")
+echo "$UPLOAD_JSON"
+# e.g.: {"message":"Image uploaded successfully","url":"https://storage.googleapis.com/my-app-images-PROJECT_ID/1712345678901-demo-photo.jpg"}
 
-# First request: full GET (not HEAD) to populate the CDN cache
-curl -o /dev/null -D - http://$LB_IP/storage/1712345678-photo.jpg
+# Extract the object name (the app uses millisecond timestamps, so expect 13 digits)
+FILENAME=$(echo "$UPLOAD_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['url'].split('/')[-1])")
+echo "Object name: $FILENAME"
+
+# Verify the object exists directly in GCS before testing CDN routing
+# A 200 here confirms the object was uploaded and the bucket is public.
+# A 403/404 means the upload failed or the bucket is not publicly readable (see Tutorial 2.1 §4).
+curl -s -o /dev/null -w "Direct GCS status: %{http_code}\n" \
+  https://storage.googleapis.com/$BUCKET_NAME/$FILENAME
+
+# First request via LB: full GET to populate the CDN cache
+curl -o /dev/null -D - http://$LB_IP/storage/$FILENAME
 
 # Second request: cache hit — look for the Age header
-curl -o /dev/null -D - http://$LB_IP/storage/1712345678-photo.jpg
+curl -o /dev/null -D - http://$LB_IP/storage/$FILENAME
 ```
 
 > **Why `curl -o /dev/null -D -` and not `curl -I`?**  
@@ -156,7 +170,7 @@ cat > lifecycle.json << 'EOF'
   "rule": [
     {
       "action": { "type": "SetStorageClass", "storageClass": "NEARLINE" },
-      "condition": { "daysSinceLastContainedInActiveMigration": 30 }
+      "condition": { "age": 30 }
     }
   ]
 }
