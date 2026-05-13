@@ -192,8 +192,8 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl restart image-app
-sudo systemctl status image-app
+sudo systemctl enable image-app
+sudo systemctl start image-app
 ```
 
 ---
