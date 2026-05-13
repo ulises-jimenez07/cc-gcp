@@ -73,15 +73,6 @@ gcloud compute images delete app-v2-image --quiet || true
 gcloud compute images delete app-v1-image --quiet || true
 ```
 
-## 7. Firewall Rules
-
-Delete the firewall rules created for the VMs and Health Checks:
-
-```bash
-echo "Removing firewall rules..."
-gcloud compute firewall-rules delete allow-app-3000 --quiet || true
-gcloud compute firewall-rules delete allow-health-checks --quiet || true
-```
 
 ---
 
