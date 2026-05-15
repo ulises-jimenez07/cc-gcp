@@ -31,8 +31,8 @@ graph TD
 Minikube needs a machine with enough RAM and CPU to run a local cluster. An `e2-standard-4` (4 vCPU, 16 GB) on Ubuntu is a reliable baseline.
 
 ```bash
-export PROJECT_ID=your-gcp-project-id
-export ZONE=us-central1-a
+PROJECT_ID=$(gcloud config get-value project)
+ZONE=us-central1-a
 
 # Create the VM
 gcloud compute instances create minikube-lab \
@@ -49,7 +49,7 @@ gcloud compute instances create minikube-lab \
 gcloud compute firewall-rules create allow-minikube-nodeport \
   --project=$PROJECT_ID \
   --direction=INGRESS \
-  --rules=tcp:30000-32767 \
+  --allow=tcp:30000-32767 \
   --source-ranges=0.0.0.0/0 \
   --target-tags=minikube-lab
 
