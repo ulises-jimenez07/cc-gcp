@@ -143,7 +143,7 @@ IMAGE_TAG=v5
 # Substitute PROJECT_ID and IMAGE_TAG into the manifest
 sed -e "s/PROJECT_ID/$PROJECT_ID/g" \
     -e "s/IMAGE_TAG/$IMAGE_TAG/g" \
-    app/v5/k8s/deployment.yaml | kubectl apply -f -
+    web_app_gcp/app/v5/k8s/deployment.yaml | kubectl apply -f -
 ```
 
 Check rollout status:
