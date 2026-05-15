@@ -254,7 +254,7 @@ kubectl scale deployment image-app --replicas=4
 
 # Horizontal Pod Autoscaler (auto-scale based on CPU)
 kubectl autoscale deployment image-app \
-  --cpu=60% \
+  --cpu-percent=60 \
   --min=2 \
   --max=10
 
