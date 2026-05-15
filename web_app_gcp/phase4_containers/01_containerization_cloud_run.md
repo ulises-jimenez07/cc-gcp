@@ -175,7 +175,7 @@ gcloud run deploy image-app \
   --max-instances=10 \
   --memory=512Mi \
   --cpu=1 \
-  --set-env-vars="DB_HOST=$CLOUD_SQL_IP,DB_USER=app_user,DB_NAME=app_db,GCS_BUCKET=$BUCKET_NAME,REDIS_HOST=$REDIS_IP,PUBSUB_TOPIC=image-upload" \
+  --set-env-vars="DB_HOST=$CLOUD_SQL_IP,DB_USER=app_user,DB_NAME=app_db,GCS_BUCKET=$BUCKET_NAME,REDIS_HOST=$REDIS_IP,PUBSUB_TOPIC=image-upload,GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
   --set-secrets="DB_PASS=db-password:latest"
 ```
 
