@@ -203,6 +203,7 @@ echo "Service URL: $SERVICE_URL"
 curl $SERVICE_URL/health
 
 # Upload an image
+curl -L -o /tmp/demo-photo.jpg https://picsum.photos/1024/768
 curl -X POST $SERVICE_URL/upload \
   -F "image=@/tmp/demo-photo.jpg"
 
