@@ -203,11 +203,11 @@ kubectl apply -f doscont.yaml
 kubectl get pod doscont
 
 # Reach cont2's server from inside cont1 (they share localhost)
-kubectl exec -it doscont -c cont1 -- sh -c "wget -qO- localhost:8081"
+kubectl exec -it doscont -c cont1 -- sh -c "apk add --no-cache wget && wget -qO- localhost:8081"
 # → cont2
 
 # Reach cont1's server from inside cont2
-kubectl exec -it doscont -c cont2 -- sh -c "wget -qO- localhost:8082"
+kubectl exec -it doscont -c cont2 -- sh -c "apk add --no-cache wget && wget -qO- localhost:8082"
 # → cont1
 
 kubectl delete pod doscont
