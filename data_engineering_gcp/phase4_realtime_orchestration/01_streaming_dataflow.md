@@ -100,6 +100,9 @@ Use the **Pub/Sub to BigQuery** managed template — no code needed:
 PROJECT_ID=$(gcloud config get-value project)
 BUCKET_NAME=retail-data-$PROJECT_ID
 
+# Create the GCS bucket if not already created
+gsutil mb -l us-central1 gs://$BUCKET_NAME/ 2>/dev/null || true
+
 gcloud dataflow jobs run stream-retail-events \
   --region=us-central1 \
   --gcs-location=gs://dataflow-templates/latest/PubSub_to_BigQuery \

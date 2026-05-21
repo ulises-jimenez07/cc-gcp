@@ -57,7 +57,63 @@ graph TD
 
 ---
 
-## 3. Create the optimized table from a Public Dataset
+## 3. Create the 'retail_analytics' Dataset & Mock Data
+
+Subsequent tutorials in this series build a multi-layered data warehouse using your own retail sales dataset. Before proceeding with optimization, you need to create the `retail_analytics` dataset and populate the `raw_sales` table with historical mock data.
+
+### Create the dataset:
+```bash
+PROJECT_ID=$(gcloud config get-value project)
+
+bq mk \
+  --dataset \
+  --location=US \
+  --description="Retail sales data warehouse" \
+  $PROJECT_ID:retail_analytics
+```
+
+### Populate raw_sales with 31 days of mock data:
+To train ARIMA+ forecasting models later in Phase 3, you need at least 14 days of historical time series data. Run the following query in the BigQuery Console to generate a month of sales data (from `2024-03-01` to `2024-03-31`):
+
+```sql
+CREATE OR REPLACE TABLE `retail_analytics.raw_sales` AS
+SELECT
+  FORMAT_DATE('%Y-%m-%d', d) AS date,
+  CASE MOD(EXTRACT(DAY FROM d), 3)
+    WHEN 0 THEN 'store_001'
+    WHEN 1 THEN 'store_002'
+    ELSE 'store_003'
+  END AS store_id,
+  CASE MOD(EXTRACT(DAY FROM d), 4)
+    WHEN 0 THEN 'laptop'
+    WHEN 1 THEN 'phone'
+    WHEN 2 THEN 'tablet'
+    ELSE 'keyboard'
+  END AS product,
+  CASE MOD(EXTRACT(DAY FROM d), 4)
+    WHEN 3 THEN 'accessories'
+    ELSE 'electronics'
+  END AS category,
+  MOD(EXTRACT(DAY FROM d), 5) + 1 AS quantity,
+  CASE MOD(EXTRACT(DAY FROM d), 4)
+    WHEN 0 THEN 1000.0
+    WHEN 1 THEN 600.0
+    WHEN 2 THEN 300.0
+    ELSE 50.0
+  END AS unit_price,
+  (MOD(EXTRACT(DAY FROM d), 5) + 1) * 
+  CASE MOD(EXTRACT(DAY FROM d), 4)
+    WHEN 0 THEN 1000.0
+    WHEN 1 THEN 600.0
+    WHEN 2 THEN 300.0
+    ELSE 50.0
+  END AS revenue
+FROM UNNEST(GENERATE_DATE_ARRAY('2024-03-01', '2024-03-31')) d;
+```
+
+---
+
+## 4. Create the optimized table from a Public Dataset
 
 The SQL is at [scripts/sql/create_optimized_table.sql](../scripts/sql/create_optimized_table.sql).
 
@@ -86,13 +142,11 @@ FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
 WHERE trip_start_timestamp > '2023-01-01';
 ```
 
-Run it:
+Run it (note that since the script contains a DDL `CREATE OR REPLACE` statement, do not pass destination table flags):
 
 ```bash
 bq query \
   --use_legacy_sql=false \
-  --destination_table=retail_analytics.optimized_taxi_trips \
-  --replace \
   "$(cat scripts/sql/create_optimized_table.sql)"
 ```
 
@@ -100,7 +154,7 @@ Or run directly in the BigQuery Console editor.
 
 ---
 
-## 4. Compare scan costs: unoptimized vs optimized
+## 5. Compare scan costs: unoptimized vs optimized
 
 ### Query on the original (unoptimized) public table
 
@@ -153,7 +207,7 @@ bq query --use_legacy_sql=false --dry_run \
 
 ---
 
-## 5. Create your own optimized retail table
+## 6. Create your own optimized retail table
 
 Apply the same pattern to your retail data:
 
@@ -193,7 +247,7 @@ ORDER BY total_revenue DESC;
 
 ---
 
-## 6. Inspect partition metadata
+## 7. Inspect partition metadata
 
 ```bash
 # Show partition details for the optimized table
@@ -210,7 +264,7 @@ bq query --use_legacy_sql=false \
 
 ---
 
-## 7. Partition expiration (cost control)
+## 8. Partition expiration (cost control)
 
 Automatically delete old partitions to avoid storing data you no longer need:
 
@@ -239,7 +293,7 @@ OPTIONS(
 
 ---
 
-## 8. Optimization summary
+## 9. Optimization summary
 
 | Technique | When to use | Expected benefit |
 |-----------|-------------|-----------------|

@@ -227,6 +227,9 @@ Export the trained model to GCS for use outside BigQuery:
 PROJECT_ID=$(gcloud config get-value project)
 BUCKET_NAME=retail-data-$PROJECT_ID
 
+# Create the bucket (GCS buckets must be globally unique)
+gsutil mb -l us-central1 gs://$BUCKET_NAME/
+
 bq extract \
   --destination_format=ML_TF_SAVED_MODEL \
   retail_analytics.trip_duration_model \

@@ -81,104 +81,151 @@ The DAG is at [scripts/dags/retail_pipeline_dag.py](../scripts/dags/retail_pipel
 Key structure:
 
 ```python
+from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
-from datetime import datetime, timedelta
 
-PROJECT_ID = "YOUR_PROJECT_ID"
-DATASET = "retail_analytics"
-BUCKET = f"retail-data-{PROJECT_ID}"
+PROJECT_ID = "YOUR_PROJECT_ID"   # replace with your GCP project ID
+DATASET    = "retail_analytics"
+BUCKET     = f"retail-data-{PROJECT_ID}"
 
 default_args = {
-    'owner': 'data-team',
-    'retries': 2,
-    'retry_delay': timedelta(minutes=5),
-    'email_on_failure': False,
+    "owner":            "data-team",
+    "depends_on_past":  False,
+    "retries":          2,
+    "retry_delay":      timedelta(minutes=5),
+    "email_on_failure": False,
+    "email_on_retry":   False,
 }
 
 with DAG(
-    dag_id='retail_daily_pipeline',
-    default_args=default_args,
-    schedule_interval='0 6 * * *',   # daily at 06:00 UTC
-    start_date=datetime(2024, 1, 1),
-    catchup=False,
-    tags=['retail', 'daily'],
+    dag_id          = "retail_daily_pipeline",
+    default_args    = default_args,
+    description     = "Daily retail sales ETL: GCS → BigQuery → ML retraining",
+    schedule_interval = "0 6 * * *",    # daily at 06:00 UTC
+    start_date      = datetime(2024, 1, 1),
+    catchup         = False,
+    max_active_runs = 1,
+    tags            = ["retail", "daily", "bigquery"],
 ) as dag:
 
-    # Step 1: wait for new data to arrive in GCS
+    # Step 1: Wait for today's sales file to land in GCS
     check_new_file = GCSObjectExistenceSensor(
-        task_id='check_new_files',
-        bucket=BUCKET,
-        object='raw/daily_sales_{{ ds }}.csv',
-        timeout=3600,
-        poke_interval=60,
+        task_id      = "check_new_files",
+        bucket       = BUCKET,
+        object       = "raw/daily_sales_{{ ds }}.csv",
+        timeout      = 3600,          # wait up to 1 hour
+        poke_interval = 60,           # check every 60 seconds
+        mode         = "reschedule",  # release worker slot while waiting
     )
 
-    # Step 2: load raw CSV into BigQuery
+    # Step 2: Load raw CSV into BigQuery (Bronze table)
     load_raw = BigQueryInsertJobOperator(
-        task_id='load_raw_to_bigquery',
-        configuration={
-            'load': {
-                'sourceUris': [f'gs://{BUCKET}/raw/daily_sales_{{{{ ds }}}}.csv'],
-                'destinationTable': {
-                    'projectId': PROJECT_ID,
-                    'datasetId': DATASET,
-                    'tableId': 'raw_sales',
+        task_id = "load_raw_to_bigquery",
+        configuration = {
+            "load": {
+                "sourceUris": [f"gs://{BUCKET}/raw/daily_sales_{{{{ ds }}}}.csv"],
+                "destinationTable": {
+                    "projectId": PROJECT_ID,
+                    "datasetId": DATASET,
+                    "tableId":   "raw_sales",
                 },
-                'sourceFormat': 'CSV',
-                'writeDisposition': 'WRITE_APPEND',
-                'skipLeadingRows': 1,
-                'autodetect': True,
+                "sourceFormat":     "CSV",
+                "writeDisposition": "WRITE_APPEND",
+                "skipLeadingRows":  1,
+                "autodetect":       True,
             }
         },
     )
 
-    # Step 3: run SQL transformation (Silver layer)
+    # Step 3: Silver layer transformation — insert cleaned rows
     run_silver = BigQueryInsertJobOperator(
-        task_id='run_silver_transformation',
-        configuration={
-            'query': {
-                'query': """
-                    INSERT INTO `{{ params.project }}.retail_analytics.clean_sales`
+        task_id = "run_silver_transformation",
+        configuration = {
+            "query": {
+                "query": f"""
+                    -- Re-create the Silver view to pick up schema changes
+                    CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.clean_sales` AS
                     SELECT
-                        PARSE_DATE('%Y-%m-%d', date) AS sale_date,
-                        TRIM(LOWER(store_id)) AS store_id,
-                        TRIM(LOWER(product)) AS product,
-                        TRIM(LOWER(category)) AS category,
-                        CAST(quantity AS INT64) AS quantity,
-                        CAST(unit_price AS FLOAT64) AS unit_price,
-                        CAST(revenue AS FLOAT64) AS revenue
-                    FROM `{{ params.project }}.retail_analytics.raw_sales`
-                    WHERE DATE(PARSE_DATE('%Y-%m-%d', date)) = '{{ ds }}'
-                      AND quantity IS NOT NULL AND revenue > 0
+                        PARSE_DATE('%Y-%m-%d', date)  AS sale_date,
+                        TRIM(LOWER(store_id))         AS store_id,
+                        TRIM(LOWER(product))          AS product,
+                        TRIM(LOWER(category))         AS category,
+                        SAFE_CAST(quantity  AS INT64)      AS quantity,
+                        SAFE_CAST(unit_price AS FLOAT64)   AS unit_price,
+                        SAFE_CAST(revenue   AS FLOAT64)    AS revenue
+                    FROM `{PROJECT_ID}.{DATASET}.raw_sales`
+                    WHERE date IS NOT NULL
+                      AND SAFE_CAST(quantity AS INT64) > 0
+                      AND SAFE_CAST(revenue AS FLOAT64) > 0
                 """,
-                'useLegacySql': False,
+                "useLegacySql": False,
             }
         },
-        params={'project': PROJECT_ID},
     )
 
-    # Step 4: retrain the ML model
-    retrain_model = BigQueryInsertJobOperator(
-        task_id='retrain_bqml_model',
-        configuration={
-            'query': {
-                'query': f"""
-                    CREATE OR REPLACE MODEL `{PROJECT_ID}.{DATASET}.trip_duration_model`
-                    OPTIONS (model_type = 'linear_reg', input_label_cols = ['label'])
+    # Step 4: Refresh Gold layer — rebuild daily aggregation table
+    refresh_gold = BigQueryInsertJobOperator(
+        task_id = "refresh_gold_summary",
+        configuration = {
+            "query": {
+                "query": f"""
+                    CREATE OR REPLACE TABLE `{PROJECT_ID}.{DATASET}.monthly_kpi_report`
+                    PARTITION BY month
                     AS
-                    SELECT trip_miles, pickup_area, dropoff_area, fare,
-                           payment_type_encoded, trip_seconds AS label
-                    FROM `{PROJECT_ID}.{DATASET}.taxi_training_data`
+                    SELECT
+                        DATE_TRUNC(sale_date, MONTH)  AS month,
+                        store_id,
+                        category,
+                        SUM(revenue)                  AS monthly_revenue,
+                        SUM(quantity)                 AS monthly_units,
+                        COUNT(*)                      AS transactions
+                    FROM `{PROJECT_ID}.{DATASET}.clean_sales`
+                    GROUP BY month, store_id, category
+                    ORDER BY month DESC, monthly_revenue DESC
                 """,
-                'useLegacySql': False,
+                "useLegacySql": False,
+            }
+        },
+    )
+
+    # Step 5: Retrain the BigQuery ML model on fresh data
+    retrain_model = BigQueryInsertJobOperator(
+        task_id = "retrain_bqml_model",
+        configuration = {
+            "query": {
+                "query": f"""
+                    CREATE OR REPLACE MODEL `{PROJECT_ID}.{DATASET}.trip_duration_model`
+                    OPTIONS (
+                        model_type        = 'linear_reg',
+                        input_label_cols  = ['label'],
+                        data_split_method = 'auto_split'
+                    ) AS
+                    SELECT
+                        CAST(trip_miles AS FLOAT64)                      AS trip_miles,
+                        IFNULL(CAST(pickup_community_area  AS INT64), 0) AS pickup_area,
+                        IFNULL(CAST(dropoff_community_area AS INT64), 0) AS dropoff_area,
+                        CAST(fare AS FLOAT64)                            AS fare,
+                        CASE payment_type WHEN 'Credit Card' THEN 1
+                                          WHEN 'Cash'        THEN 2
+                                          ELSE 0 END                     AS payment_type_encoded,
+                        CAST(trip_seconds AS INT64)                      AS label
+                    FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
+                    WHERE trip_start_timestamp > TIMESTAMP_SUB(
+                               CURRENT_TIMESTAMP(), INTERVAL 365 DAY)
+                      AND trip_seconds BETWEEN 60 AND 7200
+                      AND trip_miles   BETWEEN 0.1 AND 50
+                      AND fare         BETWEEN 2.5 AND 200
+                """,
+                "useLegacySql": False,
             }
         },
     )
 
     # Define execution order
-    check_new_file >> load_raw >> run_silver >> retrain_model
+    check_new_file >> load_raw >> run_silver >> refresh_gold >> retrain_model
 ```
 
 ---

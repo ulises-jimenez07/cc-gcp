@@ -55,7 +55,7 @@ bq mk \
 Instead of uploading files, you can "ingest" data directly from BigQuery's public library. This is useful for creating a smaller, more cost-effective subset for your own project.
 
 ### Create a subset of Chicago Taxi data
-We will ingest only trips from 2024 that were paid by credit card.
+We will ingest only trips from 2020 onwards that were paid by credit card.
 
 ```sql
 -- Run this in the BigQuery Console
@@ -78,7 +78,7 @@ WHERE trip_start_timestamp >= '2020-01-01'
 ```bash
 bq show my_analytics.taxi_2020_credit
 bq query --use_legacy_sql=false \
-  "SELECT COUNT(*) as row_count FROM my_analytics.taxi_2024_credit"
+  "SELECT COUNT(*) as row_count FROM my_analytics.taxi_2020_credit"
 ```
 
 ---

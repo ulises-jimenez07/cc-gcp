@@ -101,11 +101,12 @@ with DAG(
                         TRIM(LOWER(store_id))         AS store_id,
                         TRIM(LOWER(product))          AS product,
                         TRIM(LOWER(category))         AS category,
-                        CAST(quantity  AS INT64)      AS quantity,
-                        CAST(unit_price AS FLOAT64)   AS unit_price,
-                        CAST(revenue   AS FLOAT64)    AS revenue
+                        SAFE_CAST(quantity  AS INT64)      AS quantity,
+                        SAFE_CAST(unit_price AS FLOAT64)   AS unit_price,
+                        SAFE_CAST(revenue   AS FLOAT64)    AS revenue
                     FROM `{PROJECT_ID}.{DATASET}.raw_sales`
-                    WHERE quantity IS NOT NULL
+                    WHERE date IS NOT NULL
+                      AND SAFE_CAST(quantity AS INT64) > 0
                       AND SAFE_CAST(revenue AS FLOAT64) > 0
                 """,
                 "useLegacySql": False,
