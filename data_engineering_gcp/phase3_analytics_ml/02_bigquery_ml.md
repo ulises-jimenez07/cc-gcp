@@ -62,7 +62,7 @@ LIMIT 20;
 ## 3. Create a training dataset (Silver layer)
 
 ```sql
-CREATE OR REPLACE TABLE `retail_analytics.taxi_training_data` AS
+CREATE OR REPLACE TABLE `my_analytics.taxi_training_data` AS
 SELECT
   trip_miles,
   trip_seconds AS label,          -- What we want to predict
@@ -89,7 +89,7 @@ WHERE
 The SQL is at [scripts/sql/bqml_model.sql](../scripts/sql/bqml_model.sql).
 
 ```sql
-CREATE OR REPLACE MODEL `retail_analytics.trip_duration_model`
+CREATE OR REPLACE MODEL `my_analytics.trip_duration_model`
 OPTIONS (
   model_type = 'linear_reg',
   input_label_cols = ['label'],
@@ -102,7 +102,7 @@ SELECT
   fare,
   payment_type_encoded,
   label
-FROM `retail_analytics.taxi_training_data`;
+FROM `my_analytics.taxi_training_data`;
 ```
 
 Run in the BigQuery Console. Training takes 1–3 minutes for this dataset.
@@ -122,7 +122,7 @@ bq query --use_legacy_sql=false \
 SELECT
   *
 FROM ML.EVALUATE(
-  MODEL `retail_analytics.trip_duration_model`,
+  MODEL `my_analytics.trip_duration_model`,
   (
     SELECT
       trip_miles,
@@ -131,7 +131,7 @@ FROM ML.EVALUATE(
       fare,
       payment_type_encoded,
       label
-    FROM `retail_analytics.taxi_training_data`
+    FROM `my_analytics.taxi_training_data`
   )
 );
 ```
@@ -150,7 +150,7 @@ Key metrics for regression:
 SELECT
   processed_input,
   weight
-FROM ML.WEIGHTS(MODEL `retail_analytics.trip_duration_model`)
+FROM ML.WEIGHTS(MODEL `my_analytics.trip_duration_model`)
 ORDER BY ABS(weight) DESC;
 ```
 
@@ -166,7 +166,7 @@ SELECT
   predicted_label AS predicted_duration_seconds,
   ROUND(predicted_label / 60, 1) AS predicted_duration_minutes
 FROM ML.PREDICT(
-  MODEL `retail_analytics.trip_duration_model`,
+  MODEL `my_analytics.trip_duration_model`,
   (
     SELECT 2.5 AS trip_miles, 1 AS pickup_area, 8 AS dropoff_area,
            12.50 AS fare, 1 AS payment_type_encoded
@@ -232,7 +232,7 @@ gsutil mb -l us-central1 gs://$BUCKET_NAME/
 
 bq extract \
   --destination_format=ML_TF_SAVED_MODEL \
-  retail_analytics.trip_duration_model \
+  my_analytics.trip_duration_model \
   gs://$BUCKET_NAME/models/trip_duration/
 ```
 

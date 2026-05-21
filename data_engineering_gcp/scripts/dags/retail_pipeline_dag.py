@@ -24,6 +24,7 @@ from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
 # ---------------------------------------------------------------------------
 PROJECT_ID = "YOUR_PROJECT_ID"   # replace with your GCP project ID
 DATASET    = "retail_analytics"
+TAXI_DATASET = "my_analytics"
 BUCKET     = f"retail-data-{PROJECT_ID}"
 
 # ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ with DAG(
         configuration = {
             "query": {
                 "query": f"""
-                    CREATE OR REPLACE MODEL `{PROJECT_ID}.{DATASET}.trip_duration_model`
+                    CREATE OR REPLACE MODEL `{PROJECT_ID}.{TAXI_DATASET}.trip_duration_model`
                     OPTIONS (
                         model_type        = 'linear_reg',
                         input_label_cols  = ['label'],

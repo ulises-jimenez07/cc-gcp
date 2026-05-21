@@ -3,7 +3,7 @@
 -- ============================================================
 -- Step 1: Create training dataset
 -- ============================================================
-CREATE OR REPLACE TABLE `retail_analytics.taxi_training_data` AS
+CREATE OR REPLACE TABLE `my_analytics.taxi_training_data` AS
 SELECT
   CAST(trip_miles AS FLOAT64)                         AS trip_miles,
   IFNULL(CAST(pickup_community_area  AS INT64), 0)    AS pickup_area,
@@ -26,7 +26,7 @@ WHERE
 -- ============================================================
 -- Step 2: Train a Linear Regression model
 -- ============================================================
-CREATE OR REPLACE MODEL `retail_analytics.trip_duration_model`
+CREATE OR REPLACE MODEL `my_analytics.trip_duration_model`
 OPTIONS (
   model_type        = 'linear_reg',
   input_label_cols  = ['label'],
@@ -40,7 +40,7 @@ SELECT
   fare,
   payment_type_encoded,
   label
-FROM `retail_analytics.taxi_training_data`;
+FROM `my_analytics.taxi_training_data`;
 
 
 -- ============================================================
@@ -48,10 +48,10 @@ FROM `retail_analytics.taxi_training_data`;
 -- ============================================================
 SELECT *
 FROM ML.EVALUATE(
-  MODEL `retail_analytics.trip_duration_model`,
+  MODEL `my_analytics.trip_duration_model`,
   (
     SELECT trip_miles, pickup_area, dropoff_area, fare, payment_type_encoded, label
-    FROM `retail_analytics.taxi_training_data`
+    FROM `my_analytics.taxi_training_data`
   )
 );
 
@@ -62,7 +62,7 @@ FROM ML.EVALUATE(
 SELECT
   processed_input AS feature,
   ROUND(weight, 4) AS weight
-FROM ML.WEIGHTS(MODEL `retail_analytics.trip_duration_model`)
+FROM ML.WEIGHTS(MODEL `my_analytics.trip_duration_model`)
 ORDER BY ABS(weight) DESC;
 
 
@@ -75,7 +75,7 @@ SELECT
   ROUND(predicted_label, 0)      AS predicted_seconds,
   ROUND(predicted_label / 60, 1) AS predicted_minutes
 FROM ML.PREDICT(
-  MODEL `retail_analytics.trip_duration_model`,
+  MODEL `my_analytics.trip_duration_model`,
   (
     SELECT 2.5 AS trip_miles, 1 AS pickup_area, 8  AS dropoff_area, 12.50 AS fare, 1 AS payment_type_encoded
     UNION ALL

@@ -30,11 +30,43 @@ graph TD
 
 ---
 
-## 1. Bronze Layer — the raw table
+## 1. Bronze Layer — ingest raw sales data
 
-The raw table already exists from Tutorial 2.1 (`retail_analytics.raw_sales`). Bronze tables are never modified — they are the source of truth as data arrived.
+To build our multi-layered data warehouse, we first need a dataset to hold our tables, followed by ingesting a raw sales dataset (Bronze layer). We will ingest transaction data from the fictitious e-commerce public dataset `thelook_ecommerce` into our own `retail_analytics` dataset.
 
-View the raw schema:
+### Create the 'retail_analytics' dataset:
+Before loading any tables, create the `retail_analytics` dataset using the `bq` command-line tool:
+
+```bash
+PROJECT_ID=$(gcloud config get-value project)
+
+bq mk \
+  --dataset \
+  --location=US \
+  --description="Retail Sales Analytics Warehouse" \
+  $PROJECT_ID:retail_analytics
+```
+
+### Load data into the `raw_sales` table:
+Run this query in the BigQuery Console or using the `bq` command-line tool. It selects transactional data from March 2024, mapping store IDs and categories to fit our retail warehouse requirements:
+
+```sql
+-- Run in the BigQuery Console
+CREATE OR REPLACE TABLE `retail_analytics.raw_sales` AS
+SELECT
+  FORMAT_TIMESTAMP('%Y-%m-%d', o.created_at) AS date,
+  CONCAT('store_00', CAST(MOD(p.distribution_center_id, 3) + 1 AS STRING)) AS store_id,
+  p.name AS product,
+  CASE WHEN p.category = 'Accessories' THEN 'accessories' ELSE 'electronics' END AS category,
+  1 AS quantity,
+  o.sale_price AS unit_price,
+  o.sale_price AS revenue
+FROM `bigquery-public-data.thelook_ecommerce.order_items` o
+JOIN `bigquery-public-data.thelook_ecommerce.products` p ON o.product_id = p.id
+WHERE o.created_at >= '2024-03-01' AND o.created_at < '2024-04-01';
+```
+
+View the raw table schema:
 
 ```bash
 bq show --schema retail_analytics.raw_sales
@@ -180,11 +212,11 @@ bq query --use_legacy_sql=false \
 
 ```bash
 # List all scheduled queries in the project
-bq ls --transfer_config --transfer_location=us-central1
+bq ls --transfer_config --transfer_location=US
 
 # Run a scheduled query immediately (for testing)
 TRANSFER_CONFIG_NAME=$(bq ls --transfer_config \
-  --transfer_location=us-central1 \
+  --transfer_location=US \
   --format=json | python3 -c "
 import json, sys
 configs = json.load(sys.stdin)

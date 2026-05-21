@@ -32,11 +32,11 @@ To read from BigQuery, we use the `spark-bigquery-connector`. This is pre-instal
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
 BUCKET_NAME="${PROJECT_ID}-spark-temp"
-gsutil mb -l us-central1 gs://$BUCKET_NAME/
+gsutil mb -l us-central1 gs://$BUCKET_NAME/ 2>/dev/null || true
 
 gcloud dataproc clusters create spark-cluster \
   --region=us-central1 \
-  --zone="" \
+  --zone=us-central1-a \
   --num-workers=2 \
   --master-machine-type=e2-standard-2 \
   --worker-machine-type=e2-medium \
@@ -83,18 +83,35 @@ In a real pipeline, you wouldn't use a notebook. You'd submit a script. Check `s
 
 ### Key Logic:
 ```python
+from pyspark.sql import SparkSession, functions as F
+
+spark = SparkSession.builder \
+    .appName("TaxiTransform") \
+    .getOrCreate()
+
+# Reuse the temp bucket set at cluster creation via --temp-bucket
+bucket = spark.conf.get("spark.hadoop.fs.gs.system.bucket")
+
 # Read from public data
 df = spark.read.format("bigquery") \
     .option("table", "bigquery-public-data.chicago_taxi_trips.taxi_trips") \
     .load()
 
-# Filter and Aggregate
-big_trips = df.filter(df.trip_miles > 10) \
-    .groupBy("payment_type") \
-    .agg({"fare": "avg", "tips": "sum"})
+# Filter for long trips and standardize payment type
+df_filtered = df \
+    .filter(F.col("trip_miles") > 5) \
+    .filter(F.col("fare") > 0) \
+    .withColumn("payment_type", F.lower(F.col("payment_type")))
+
+# Aggregate: avg fare and total tips by payment type
+summary = df_filtered.groupBy("payment_type").agg(
+    F.round(F.avg("fare"), 2).alias("avg_fare"),
+    F.round(F.sum("tips"), 2).alias("total_tips"),
+    F.count("*").alias("trip_count")
+)
 
 # Write as Parquet to GCS
-big_trips.write.mode("overwrite").parquet("gs://YOUR_BUCKET/processed/taxi_summary/")
+summary.write.mode("overwrite").parquet(f"gs://{bucket}/processed/taxi_summary/")
 ```
 
 ---

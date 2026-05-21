@@ -79,7 +79,7 @@ We will create a cluster with **Component Gateway** enabled to access the HDFS a
 ```bash
 gcloud dataproc clusters create spark-cluster \
     --region=us-central1 \
-    --zone="" \
+    --zone=us-central1-a \
     --num-workers=2 \
     --master-machine-type=e2-standard-2 \
     --worker-machine-type=e2-medium \

@@ -7,7 +7,7 @@
 -- Run in BigQuery Console or via:
 --   bq query --use_legacy_sql=false < create_optimized_table.sql
 
-CREATE OR REPLACE TABLE `retail_analytics.optimized_taxi_trips`
+CREATE OR REPLACE TABLE `my_analytics.optimized_taxi_trips`
 PARTITION BY DATE(trip_start_timestamp)
 CLUSTER BY pickup_community_area, payment_type
 OPTIONS (

@@ -57,59 +57,14 @@ graph TD
 
 ---
 
-## 3. Create the 'retail_analytics' Dataset & Mock Data
+## 3. Use the 'my_analytics' Dataset
 
-Subsequent tutorials in this series build a multi-layered data warehouse using your own retail sales dataset. Before proceeding with optimization, you need to create the `retail_analytics` dataset and populate the `raw_sales` table with historical mock data.
+Before creating tables, you need a dataset to hold them. In the previous tutorial (2.1), you created the `my_analytics` dataset. We will reuse it to store our optimized tables. If you want to verify it exists, run:
 
-### Create the dataset:
 ```bash
-PROJECT_ID=$(gcloud config get-value project)
-
-bq mk \
-  --dataset \
-  --location=US \
-  --description="Retail sales data warehouse" \
-  $PROJECT_ID:retail_analytics
+bq show my_analytics
 ```
 
-### Populate raw_sales with 31 days of mock data:
-To train ARIMA+ forecasting models later in Phase 3, you need at least 14 days of historical time series data. Run the following query in the BigQuery Console to generate a month of sales data (from `2024-03-01` to `2024-03-31`):
-
-```sql
-CREATE OR REPLACE TABLE `retail_analytics.raw_sales` AS
-SELECT
-  FORMAT_DATE('%Y-%m-%d', d) AS date,
-  CASE MOD(EXTRACT(DAY FROM d), 3)
-    WHEN 0 THEN 'store_001'
-    WHEN 1 THEN 'store_002'
-    ELSE 'store_003'
-  END AS store_id,
-  CASE MOD(EXTRACT(DAY FROM d), 4)
-    WHEN 0 THEN 'laptop'
-    WHEN 1 THEN 'phone'
-    WHEN 2 THEN 'tablet'
-    ELSE 'keyboard'
-  END AS product,
-  CASE MOD(EXTRACT(DAY FROM d), 4)
-    WHEN 3 THEN 'accessories'
-    ELSE 'electronics'
-  END AS category,
-  MOD(EXTRACT(DAY FROM d), 5) + 1 AS quantity,
-  CASE MOD(EXTRACT(DAY FROM d), 4)
-    WHEN 0 THEN 1000.0
-    WHEN 1 THEN 600.0
-    WHEN 2 THEN 300.0
-    ELSE 50.0
-  END AS unit_price,
-  (MOD(EXTRACT(DAY FROM d), 5) + 1) * 
-  CASE MOD(EXTRACT(DAY FROM d), 4)
-    WHEN 0 THEN 1000.0
-    WHEN 1 THEN 600.0
-    WHEN 2 THEN 300.0
-    ELSE 50.0
-  END AS revenue
-FROM UNNEST(GENERATE_DATE_ARRAY('2024-03-01', '2024-03-31')) d;
-```
 
 ---
 
@@ -118,7 +73,7 @@ FROM UNNEST(GENERATE_DATE_ARRAY('2024-03-01', '2024-03-31')) d;
 The SQL is at [scripts/sql/create_optimized_table.sql](../scripts/sql/create_optimized_table.sql).
 
 ```sql
-CREATE OR REPLACE TABLE `retail_analytics.optimized_taxi_trips`
+CREATE OR REPLACE TABLE `my_analytics.optimized_taxi_trips`
 PARTITION BY DATE(trip_start_timestamp)
 CLUSTER BY pickup_community_area, payment_type
 AS
@@ -179,7 +134,7 @@ SELECT
   pickup_community_area,
   COUNT(*) AS trips,
   ROUND(AVG(fare), 2) AS avg_fare
-FROM `retail_analytics.optimized_taxi_trips`
+FROM `my_analytics.optimized_taxi_trips`
 WHERE
   DATE(trip_start_timestamp) = '2023-06-15'
   AND payment_type = 'Credit Card'
@@ -200,54 +155,12 @@ bq query --use_legacy_sql=false --dry_run \
 # Check bytes scanned for the optimized query
 bq query --use_legacy_sql=false --dry_run \
   "SELECT pickup_community_area, COUNT(*) FROM \
-  retail_analytics.optimized_taxi_trips \
+  my_analytics.optimized_taxi_trips \
   WHERE DATE(trip_start_timestamp) = '2023-06-15' \
   GROUP BY 1"
 ```
 
----
-
-## 6. Create your own optimized retail table
-
-Apply the same pattern to your retail data:
-
-```sql
--- Run in BigQuery Console
-CREATE OR REPLACE TABLE `retail_analytics.sales_optimized`
-PARTITION BY DATE(sale_date)
-CLUSTER BY store_id, category
-AS
-SELECT
-  PARSE_DATE('%Y-%m-%d', date) AS sale_date,
-  store_id,
-  product,
-  category,
-  quantity,
-  unit_price,
-  revenue
-FROM `retail_analytics.raw_sales`;
-```
-
-Now this filter uses partition pruning AND cluster pruning:
-
-```sql
--- This query reads only the March 2024 partition
--- and skips non-electronics blocks within that partition
-SELECT
-  product,
-  SUM(quantity) AS total_units_sold,
-  SUM(revenue) AS total_revenue
-FROM `retail_analytics.sales_optimized`
-WHERE
-  sale_date BETWEEN '2024-03-01' AND '2024-03-31'
-  AND category = 'electronics'
-GROUP BY product
-ORDER BY total_revenue DESC;
-```
-
----
-
-## 7. Inspect partition metadata
+## 6. Inspect partition metadata
 
 ```bash
 # Show partition details for the optimized table
@@ -256,7 +169,7 @@ bq query --use_legacy_sql=false \
      partition_id,
      total_rows,
      total_logical_bytes / POW(1024, 3) AS size_gb
-   FROM retail_analytics.INFORMATION_SCHEMA.PARTITIONS
+   FROM my_analytics.INFORMATION_SCHEMA.PARTITIONS
    WHERE table_name = 'optimized_taxi_trips'
    ORDER BY partition_id DESC
    LIMIT 20"
@@ -264,7 +177,7 @@ bq query --use_legacy_sql=false \
 
 ---
 
-## 8. Partition expiration (cost control)
+## 7. Partition expiration (cost control)
 
 Automatically delete old partitions to avoid storing data you no longer need:
 
@@ -272,7 +185,7 @@ Automatically delete old partitions to avoid storing data you no longer need:
 # Set partition expiration to 90 days on a table
 bq update \
   --time_partitioning_expiration=7776000 \
-  retail_analytics.sales_optimized
+  my_analytics.optimized_taxi_trips
 ```
 
 Or set it at table creation:
@@ -293,7 +206,7 @@ OPTIONS(
 
 ---
 
-## 9. Optimization summary
+## 8. Optimization summary
 
 | Technique | When to use | Expected benefit |
 |-----------|-------------|-----------------|

@@ -105,7 +105,7 @@ gsutil mb -l us-central1 gs://$BUCKET_NAME/ 2>/dev/null || true
 
 gcloud dataflow jobs run stream-retail-events \
   --region=us-central1 \
-  --gcs-location=gs://dataflow-templates/latest/PubSub_to_BigQuery \
+  --gcs-location=gs://dataflow-templates-us-central1/latest/PubSub_to_BigQuery \
   --parameters=\
 "inputTopic=projects/$PROJECT_ID/topics/retail-events,\
 outputTableSpec=$PROJECT_ID:retail_analytics.live_sales_events,\
@@ -214,7 +214,6 @@ ORDER BY revenue_last_5_min DESC;
 The managed template handles simple pass-through. For transformations (field enrichment, deduplication, windowed aggregations), write a **Beam pipeline** in Python:
 
 ```python
-# See scripts/dataflow/streaming_pipeline.py for the full example
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms.window import FixedWindows
