@@ -51,3 +51,8 @@ Thumbs.db
 
 # Local files (docs, scripts) — never commit
 _*
+*.txt
+*.csv
+
+# quizzes
+*.gs
