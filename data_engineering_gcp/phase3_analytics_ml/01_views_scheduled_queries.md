@@ -224,10 +224,17 @@ print(configs[0]['name'])
 ")
 
 bq mk --transfer_run \
-  --start_time=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  --end_time=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --run_time=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
   $TRANSFER_CONFIG_NAME
+
+# Delete the scheduled query
+bq rm -f --transfer_config $TRANSFER_CONFIG_NAME
 ```
+
+### Delete via Google Cloud Console:
+1. In the Google Cloud Console, go to **BigQuery** > **Scheduled Queries**.
+2. Select the checkbox next to **Monthly KPI Report** (or your scheduled query).
+3. Click **Delete** at the top of the page and confirm.
 
 ---
 
