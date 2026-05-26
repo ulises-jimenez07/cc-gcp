@@ -59,17 +59,6 @@ gsutil mb -l us-central1 gs://$BUCKET_NAME/
 gsutil mb -l us-central1 gs://$TEMP_BUCKET/
 ```
 
-### Sourcing External Data
-Download a classic dataset (Project Gutenberg book) to your cloud shell or local environment, then upload it to your bucket.
-
-```bash
-# Download test data
-curl -O https://www.gutenberg.org/cache/epub/20417/pg20417.txt
-
-# Upload to GCS
-gsutil cp pg20417.txt gs://$BUCKET_NAME/raw/gutenberg.txt
-```
-
 ---
 
 ## 3. Create the Dataproc Cluster
@@ -98,6 +87,18 @@ gcloud dataproc clusters create spark-cluster \
 | **Storage** | Single machine disk | Distributed across cluster nodes | Global multi-tenant storage |
 | **Persistence** | Lost if node dies | Lost if cluster is deleted | Persistent and independent of cluster |
 | **Access** | `ls /path` | `hdfs dfs -ls /path` | `gsutil ls gs://bucket` |
+
+### Sourcing External Data
+Download a classic dataset (Project Gutenberg book) to your cloud shell or local environment, then upload it to your bucket.
+
+```bash
+# Download test data
+curl -O https://www.gutenberg.org/cache/epub/20417/pg20417.txt
+
+# Upload to GCS
+gsutil cp pg20417.txt gs://$BUCKET_NAME/raw/gutenberg.txt
+```
+
 
 ### Interaction with HDFS
 Connect to your master node via SSH to explore the distributed file system:
@@ -132,27 +133,6 @@ Before submitting a job to the cluster, you can test your mapper and reducer log
 ```bash
 # Test using the provided word count script
 cat pg20417.txt | python3 scripts/pyspark/word_count.py --mode=mapper | sort -k1,1 | python3 scripts/pyspark/word_count.py --mode=reducer | head -n 5
-```
-
-#### Running on the Dataproc Master Node (without cloning the repo)
-
-If the repo is not cloned on the master, copy the script and input file from your local machine using `gcloud compute scp`:
-
-```bash
-# Copy the script and input file to the master node
-gcloud compute scp scripts/pyspark/word_count.py spark-cluster-m:~/ --zone=us-central1-a
-gcloud compute scp pg20417.txt spark-cluster-m:~/ --zone=us-central1-a
-```
-
-Then SSH into the master and run the simulation:
-
-```bash
-gcloud compute ssh spark-cluster-m --zone=us-central1-a
-```
-
-```bash
-# Once on the master node
-cat pg20417.txt | python3 word_count.py --mode=mapper | sort -k1,1 | python3 word_count.py --mode=reducer | head -n 5
 ```
 
 ---
