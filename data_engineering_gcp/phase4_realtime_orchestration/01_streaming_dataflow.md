@@ -110,9 +110,11 @@ gcloud dataflow jobs run stream-retail-events \
 "inputTopic=projects/${PROJECT_ID}/topics/retail-events,\
 outputTableSpec=${PROJECT_ID}:retail_analytics.live_sales_events,\
 outputDeadletterTable=${PROJECT_ID}:retail_analytics.live_sales_events_errors" \
-  --staging-location=gs://$BUCKET_NAME/dataflow-staging/ \
-  --temp-location=gs://$BUCKET_NAME/dataflow-temp/
+  --staging-location=gs://$BUCKET_NAME/dataflow-staging/
 ```
+
+> [!TIP]
+> If you encounter a `ZONE_RESOURCE_POOL_EXHAUSTED` error (which occurs when Compute Engine lacks VM capacity in the automatically selected zone), you can explicitly set a worker zone within your region using the `--worker-zone` flag (e.g., `--worker-zone=us-central1-a`).
 
 ---
 
@@ -129,6 +131,8 @@ for i in {1..10}; do
   PRODUCTS=("laptop" "phone" "tablet" "monitor" "keyboard")
   CATEGORIES=("electronics" "electronics" "electronics" "electronics" "accessories")
   IDX=$(( RANDOM % 5 ))
+  # Adjust index for 1-based array indexing in zsh
+  [ -n "$ZSH_VERSION" ] && IDX=$(( IDX + 1 ))
   PRODUCT=${PRODUCTS[$IDX]}
   CATEGORY=${CATEGORIES[$IDX]}
   QTY=$(( (RANDOM % 5) + 1 ))
