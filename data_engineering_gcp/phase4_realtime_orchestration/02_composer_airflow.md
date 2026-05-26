@@ -18,12 +18,41 @@ graph TD
 
 ---
 
-## 1. Enable APIs
+## 1. Enable APIs and Configure IAM Permissions
+
+Enable the Cloud Composer and Cloud Storage APIs:
 
 ```bash
 gcloud services enable \
   composer.googleapis.com \
   storage.googleapis.com
+```
+
+### Grant Required IAM Roles
+
+Cloud Composer 2 requires the environment's service account to have the `Composer Worker` role. Additionally, the Cloud Composer Service Agent requires specific permissions to manage GKE clusters on your behalf.
+
+Run the following commands to retrieve your project's default Compute Engine service account and configure these permissions:
+
+```bash
+PROJECT_ID=$(gcloud config get-value project)
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# 1. Grant Composer Worker role to the Compute Engine default SA
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${COMPUTE_SA}" \
+  --role="roles/composer.worker"
+
+# 2. Grant Composer API Service Agent Extension role to Composer Service Agent
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@cloudcomposer-accounts.iam.gserviceaccount.com" \
+  --role="roles/composer.ServiceAgentV2Ext"
+
+# 3. Grant Service Account User role to Composer Service Agent on the Compute Engine default SA
+gcloud iam service-accounts add-iam-policy-binding ${COMPUTE_SA} \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@cloudcomposer-accounts.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
 ```
 
 ---
@@ -39,15 +68,22 @@ gcloud services enable \
 3. **Location**: `us-central1`
 4. **Image version**: `composer-2-airflow-2` (latest)
 5. **Node count**: 3 (minimum)
-6. Click **Create**
+6. **Service Account**: Select your default Compute Engine service account (ensure it has the `Composer Worker` role)
+7. Click **Create**
 
 ### gcloud CLI
 
 ```bash
+PROJECT_ID=$(gcloud config get-value project)
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
 gcloud composer environments create retail-pipeline-env \
   --location=us-central1 \
-  --image-version=composer-2-airflow-2
+  --image-version=composer-2-airflow-2 \
+  --service-account="${COMPUTE_SA}"
 ```
+
 
 Monitor creation:
 
