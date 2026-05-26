@@ -98,7 +98,7 @@ with DAG(
                     -- Re-create the Silver view to pick up schema changes
                     CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.clean_sales` AS
                     SELECT
-                        PARSE_DATE('%Y-%m-%d', date)  AS sale_date,
+                        SAFE_CAST(date AS DATE)  AS sale_date,
                         TRIM(LOWER(store_id))         AS store_id,
                         TRIM(LOWER(product))          AS product,
                         TRIM(LOWER(category))         AS category,
@@ -137,7 +137,6 @@ with DAG(
                         COUNT(*)                      AS transactions
                     FROM `{PROJECT_ID}.{DATASET}.clean_sales`
                     GROUP BY month, store_id, category
-                    ORDER BY month DESC, monthly_revenue DESC
                 """,
                 "useLegacySql": False,
             }
@@ -168,8 +167,7 @@ with DAG(
                                           ELSE 0 END                     AS payment_type_encoded,
                         CAST(trip_seconds AS INT64)                      AS label
                     FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
-                    WHERE trip_start_timestamp > TIMESTAMP_SUB(
-                              CURRENT_TIMESTAMP(), INTERVAL 365 DAY)
+                    WHERE trip_start_timestamp BETWEEN '2023-01-01' AND '2023-12-31'
                       AND trip_seconds BETWEEN 60 AND 7200
                       AND trip_miles   BETWEEN 0.1 AND 50
                       AND fare         BETWEEN 2.5 AND 200

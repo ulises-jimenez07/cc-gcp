@@ -186,7 +186,7 @@ with DAG(
                     -- Re-create the Silver view to pick up schema changes
                     CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.clean_sales` AS
                     SELECT
-                        PARSE_DATE('%Y-%m-%d', date)  AS sale_date,
+                        SAFE_CAST(date AS DATE)  AS sale_date,
                         TRIM(LOWER(store_id))         AS store_id,
                         TRIM(LOWER(product))          AS product,
                         TRIM(LOWER(category))         AS category,
@@ -221,7 +221,6 @@ with DAG(
                         COUNT(*)                      AS transactions
                     FROM `{PROJECT_ID}.{DATASET}.clean_sales`
                     GROUP BY month, store_id, category
-                    ORDER BY month DESC, monthly_revenue DESC
                 """,
                 "useLegacySql": False,
             }
@@ -250,8 +249,7 @@ with DAG(
                                           ELSE 0 END                     AS payment_type_encoded,
                         CAST(trip_seconds AS INT64)                      AS label
                     FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
-                    WHERE trip_start_timestamp > TIMESTAMP_SUB(
-                               CURRENT_TIMESTAMP(), INTERVAL 365 DAY)
+                    WHERE trip_start_timestamp BETWEEN '2023-01-01' AND '2023-12-31'
                       AND trip_seconds BETWEEN 60 AND 7200
                       AND trip_miles   BETWEEN 0.1 AND 50
                       AND fare         BETWEEN 2.5 AND 200
@@ -313,7 +311,29 @@ Or click **Trigger DAG** in the Airflow UI.
 
 ---
 
-## 8. Monitor execution
+## 8. Upload mock data to trigger the sensor
+
+Because the first task (`check_new_files`) is a GCS sensor waiting for a daily sales file, you need to upload a mock CSV file to GCS to satisfy the sensor and allow the pipeline to proceed.
+
+```bash
+PROJECT_ID=$(gcloud config get-value project)
+FILENAME="daily_sales_$(date +%Y-%m-%d).csv"
+
+# 1. Create a local mock CSV file
+cat <<EOF > daily_sales.csv
+date,store_id,product,category,quantity,unit_price,revenue
+$(date +%Y-%m-%d),store_101,iPhone 15,electronics,2,999.99,1999.98
+$(date +%Y-%m-%d),store_102,MacBook Pro,electronics,1,1999.99,1999.99
+$(date +%Y-%m-%d),store_101,Coffee Maker,appliances,5,49.99,249.95
+EOF
+
+# 2. Upload the file to your GCS bucket
+gsutil cp daily_sales.csv gs://retail-data-${PROJECT_ID}/raw/${FILENAME}
+```
+
+---
+
+## 9. Monitor execution
 
 ### Console (Airflow UI)
 
@@ -334,29 +354,6 @@ gcloud composer environments run retail-pipeline-env \
   --location=us-central1 \
   tasks log \
   -- retail_daily_pipeline load_raw_to_bigquery $(date +%Y-%m-%dT%H:%M:%S)
-```
-
----
-
-## 9. Add an SLA and alerting
-
-```python
-# Add to the DAG definition:
-from airflow.models import SlaMiss
-
-def sla_miss_callback(dag, task_list, blocking_task_list, slas, blocking_tis):
-    print(f"SLA missed for tasks: {task_list}")
-    # Send to Slack, PagerDuty, etc.
-
-with DAG(
-    dag_id='retail_daily_pipeline',
-    sla_miss_callback=sla_miss_callback,
-    ...
-) as dag:
-    load_raw = BigQueryInsertJobOperator(
-        ...,
-        sla=timedelta(hours=2),   # alert if task takes > 2 hours
-    )
 ```
 
 ---
