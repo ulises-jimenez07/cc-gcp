@@ -138,7 +138,7 @@ Once Spark processes the public data, you can load your curated results back int
 
 ```bash
 # Create your own dataset
-bq mk --dataset $PROJECT_ID:my_analytics
+bq mk --dataset ${PROJECT_ID}:my_analytics
 
 # Load result from GCS
 bq load \

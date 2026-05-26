@@ -45,7 +45,7 @@ bq mk \
   --dataset \
   --location=US \
   --description="Market research using public data" \
-  $PROJECT_ID:my_analytics
+  ${PROJECT_ID}:my_analytics
 ```
 
 ---

@@ -44,7 +44,7 @@ bq mk \
   --dataset \
   --location=US \
   --description="Retail Sales Analytics Warehouse" \
-  $PROJECT_ID:retail_analytics
+  ${PROJECT_ID}:retail_analytics
 ```
 
 ### Load data into the `raw_sales` table:

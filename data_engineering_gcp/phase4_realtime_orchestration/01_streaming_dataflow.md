@@ -107,9 +107,9 @@ gcloud dataflow jobs run stream-retail-events \
   --region=us-central1 \
   --gcs-location=gs://dataflow-templates-us-central1/latest/PubSub_to_BigQuery \
   --parameters=\
-"inputTopic=projects/$PROJECT_ID/topics/retail-events,\
-outputTableSpec=$PROJECT_ID:retail_analytics.live_sales_events,\
-outputDeadletterTable=$PROJECT_ID:retail_analytics.live_sales_events_errors" \
+"inputTopic=projects/${PROJECT_ID}/topics/retail-events,\
+outputTableSpec=${PROJECT_ID}:retail_analytics.live_sales_events,\
+outputDeadletterTable=${PROJECT_ID}:retail_analytics.live_sales_events_errors" \
   --staging-location=gs://$BUCKET_NAME/dataflow-staging/ \
   --temp-location=gs://$BUCKET_NAME/dataflow-temp/
 ```
