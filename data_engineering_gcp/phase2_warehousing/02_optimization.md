@@ -191,7 +191,7 @@ bq update \
 Or set it at table creation:
 
 ```sql
-CREATE TABLE retail_analytics.events_partitioned
+CREATE TABLE my_analytics.events_partitioned
 (
   event_timestamp TIMESTAMP,
   event_type STRING,

@@ -59,8 +59,7 @@ We will ingest only trips from 2020 onwards that were paid by credit card.
 
 ```sql
 -- Run this in the BigQuery Console
--- Replace YOUR_PROJECT_ID with your actual GCP project ID
-CREATE OR REPLACE TABLE `YOUR_PROJECT_ID.my_analytics.taxi_2020_credit` AS
+CREATE OR REPLACE TABLE `my_analytics.taxi_2020_credit` AS
 SELECT
   unique_key,
   trip_start_timestamp,
